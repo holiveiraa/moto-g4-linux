@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="440" viewBox="0 0 1120 440" role="img" aria-labelledby="title desc">
+  <title id="title">Moto G4 Linux</title>
+  <desc id="desc">Original illustration of a phone terminal. Native Linux, touch, SSH and voice. Experimental athene source port.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1118"/><stop offset="1" stop-color="#172d39"/></linearGradient>
+    <linearGradient id="screen" x2="0" y2="1"><stop stop-color="#162635"/><stop offset="1" stop-color="#0b1118"/></linearGradient>
+  </defs>
+  <rect width="1120" height="440" rx="26" fill="url(#bg)"/>
+  <circle cx="1050" cy="30" r="240" fill="#68e3bc" opacity=".035"/>
+  <circle cx="45" cy="430" r="195" fill="#68e3bc" opacity=".025"/>
+  <g font-family="DejaVu Sans,Segoe UI,Arial,sans-serif">
+    <rect x="54" y="50" width="66" height="27" rx="13" fill="#205745"/>
+    <text x="87" y="69" fill="#a4f3d7" text-anchor="middle" font-size="12" font-weight="700">ATHENE</text>
+    <text x="133" y="69" fill="#a8b8ca" font-size="12" letter-spacing="2">EXPERIMENTAL SOURCE PORT</text>
+    <text x="50" y="160" fill="#f1f5fa" font-size="62" font-weight="700">Moto G4 Linux</text>
+    <text x="54" y="212" fill="#68e3bc" font-size="27">A terminal-first second life.</text>
+    <text x="54" y="257" fill="#a8b8ca" font-size="18">Your network. Your servers. Your old phone.</text>
+    <g font-size="13" font-weight="700">
+      <rect x="54" y="298" width="92" height="34" rx="9" fill="#1e2c3b"/><text x="100" y="320" fill="#f1f5fa" text-anchor="middle">ALPINE</text>
+      <rect x="157" y="298" width="92" height="34" rx="9" fill="#1e2c3b"/><text x="203" y="320" fill="#f1f5fa" text-anchor="middle">ARM64</text>
+      <rect x="260" y="298" width="92" height="34" rx="9" fill="#1e2c3b"/><text x="306" y="320" fill="#f1f5fa" text-anchor="middle">SSH</text>
+      <rect x="363" y="298" width="110" height="34" rx="9" fill="#205745"/><text x="418" y="320" fill="#a4f3d7" text-anchor="middle">VOICE INPUT</text>
+    </g>
+    <text x="54" y="387" fill="#738da4" font-size="13">Built on postmarketOS, lk2nd and the Linux community.</text>
+    <g transform="translate(805,22)">
+      <rect width="240" height="396" rx="30" fill="#080d13" stroke="#344c5e" stroke-width="2"/>
+      <rect x="84" y="12" width="72" height="5" rx="3" fill="#263b4b"/>
+      <rect x="13" y="30" width="214" height="321" rx="10" fill="url(#screen)"/>
+      <text x="25" y="52" fill="#f1f5fa" font-size="11" font-weight="700">moto / linux</text>
+      <circle cx="204" cy="48" r="4" fill="#68e3bc"/>
+      <rect x="23" y="65" width="101" height="23" rx="6" fill="#205745"/><text x="34" y="80" fill="#a4f3d7" font-size="9">remote session</text>
+      <text x="134" y="80" fill="#a8b8ca" font-size="10">+ new</text>
+      <g font-family="DejaVu Sans Mono,monospace" font-size="10">
+        <text x="25" y="113" fill="#68e3bc">demo@server:~ $</text>
+        <text x="25" y="135" fill="#dce9f7">echo hello, linux</text>
+        <text x="25" y="157" fill="#a8b8ca">hello, linux</text>
+        <text x="25" y="179" fill="#68e3bc">$</text><rect x="40" y="169" width="6" height="13" fill="#68e3bc"/>
+      </g>
+      <path d="M23 209H217" stroke="#283e50"/>
+      <text x="25" y="227" fill="#738da4" font-size="8">TERMINAL KEYS</text>
+      <g fill="#223546">
+        <rect x="23" y="238" width="43" height="27" rx="5"/><rect x="72" y="238" width="43" height="27" rx="5"/>
+        <rect x="121" y="238" width="43" height="27" rx="5"/><rect x="170" y="238" width="47" height="27" rx="5"/>
+        <rect x="23" y="272" width="61" height="27" rx="5"/><rect x="90" y="272" width="61" height="27" rx="5"/>
+        <rect x="157" y="272" width="60" height="27" rx="5"/>
+      </g>
+      <g fill="#f1f5fa" text-anchor="middle" font-size="10">
+        <text x="44" y="256">Esc</text><text x="93" y="256">Ctrl</text><text x="142" y="256">Alt</text><text x="193" y="256">Tab</text>
+        <text x="53" y="290">←</text><text x="120" y="290">↑ ↓</text><text x="187" y="290">→</text>
+      </g>
+      <rect x="23" y="307" width="144" height="29" rx="6" fill="#223546"/><rect x="173" y="307" width="44" height="29" rx="6" fill="#68e3bc"/>
+      <text x="94" y="326" text-anchor="middle" fill="#a8b8ca" font-size="9">space</text><text x="195" y="326" text-anchor="middle" fill="#0b1118" font-size="11">↵</text>
+      <rect x="101" y="363" width="38" height="18" rx="6" fill="#14212e"/>
+      <text x="120" y="407" text-anchor="middle" fill="#738da4" font-size="8">INTERFACE ILLUSTRATION</text>
+    </g>
+  </g>
+</svg>

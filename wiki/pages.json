@@ -1,0 +1,14 @@
+{
+  "Home": "docs/README.md",
+  "Agent-Installation": "docs/agent-installation.md",
+  "Installation": "docs/installation.md",
+  "Hardware-Status": "docs/status.md",
+  "User-Guide": "docs/user-guide.md",
+  "Building": "docs/building.md",
+  "Architecture": "docs/architecture.md",
+  "Troubleshooting": "docs/troubleshooting.md",
+  "Testing": "tests/README.md",
+  "Credits": "CREDITS.md",
+  "Licenses": "LICENSES/README.md",
+  "Releases": "docs/releasing.md"
+}

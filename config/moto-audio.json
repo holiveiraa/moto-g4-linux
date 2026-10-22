@@ -1,0 +1,19 @@
+{
+  "model": "athene-cs35l34",
+  "validated": true,
+  "card": 0,
+  "playback": "moto_speaker",
+  "capture": "hw:0,0",
+  "route": [
+    ["ADC1 Volume", "6"],
+    ["DEC1 MUX", "ADC1"],
+    ["MI2S_TX Channels", "One"],
+    ["MultiMedia1 Mixer TERT_MI2S_TX", "1"],
+    ["AMP Gain", "3dB"],
+    ["QUIN MI2S RX Format", "LPCM"],
+    ["QUIN_MI2S_RX Audio Mixer MultiMedia1", "1"]
+  ],
+  "volume_controls": [
+    {"name": "Moto Playback Volume", "min": 0, "max": 100}
+  ]
+}

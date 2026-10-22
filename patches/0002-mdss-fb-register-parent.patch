@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] fbdev: mdss: associate framebuffer with its platform device
+
+The vendor probe allocates fb_info with a NULL parent. New Xorg fbdevhw checks
+the framebuffer device's subsystem to distinguish PCI from platform devices;
+without a parent, /sys/class/graphics/fb0/device/subsystem does not exist and a
+working framebuffer is rejected. Supply the actual platform device to the
+standard allocator, so registration exposes the expected device relationship.
+
+--- a/drivers/video/msm/mdss/mdss_fb.c
++++ b/drivers/video/msm/mdss/mdss_fb.c
+@@ -1173,7 +1173,7 @@
+ 	/*
+ 	 * alloc framebuffer info + par data
+ 	 */
+-	fbi = framebuffer_alloc(sizeof(struct msm_fb_data_type), NULL);
++	fbi = framebuffer_alloc(sizeof(struct msm_fb_data_type), &pdev->dev);
+ 	if (fbi == NULL) {
+ 		pr_err("can't allocate framebuffer info data!\n");
+ 		return -ENOMEM;

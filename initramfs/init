@@ -1,0 +1,151 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# First-light Linux userspace. Runs entirely in RAM; does not mount eMMC.
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+# The vendor Wi-Fi driver uses the userspace firmware fallback for its INI.
+# Alpine's BusyBox mdev provides that handler, with files in /lib/firmware.
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+mkdir -p /run /tmp
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /tmp
+hostname moto-g4-linux
+ip link set lo up
+for governor in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do
+    [ -f "$governor" ] || continue
+    available=$(cat "${governor%/*}/scaling_available_governors")
+    case " $available " in
+        *' ondemand '*) echo ondemand > "$governor" ;;
+    esac
+done
+if [ -e /sys/class/graphics/fb0/blank ]; then
+    echo 0 > /sys/class/graphics/fb0/blank
+fi
+if [ -x /usr/sbin/msm-fb-refresher ]; then
+    /usr/sbin/msm-fb-refresher --loop > /tmp/display.log 2>&1 &
+fi
+# The kernel hwrng feeder now seeds the pool itself. A second rngd reader is
+# unnecessary and exhausts the old PRNG FIFO, producing repeated warnings.
+{
+    cat /sys/class/misc/hw_random/rng_current 2>/dev/null
+    cat /proc/sys/kernel/random/entropy_avail
+} > /tmp/rng.log
+
+{
+    echo 'Moto G4 Plus: native Linux first-light image'
+    uname -a
+    cat /proc/cmdline
+    cat /proc/meminfo | head -n 4
+    ls /sys/class/graphics /sys/class/input /sys/class/net
+} > /tmp/firstboot.log 2>&1
+# Record init errors as well as successful progress, independently of SSH.
+exec >> /tmp/init.log 2>&1
+set -x
+
+# The vendor kernel provides the Android USB gadget driver. Its name does not
+# imply Android userspace; configure it directly from our Linux init process.
+gadget=/sys/class/android_usb/android0
+if [ -d "$gadget" ]; then
+    echo 0 > "$gadget/enable"
+    echo 18d1 > "$gadget/idVendor"
+    echo 4ee3 > "$gadget/idProduct"
+    echo 'Moto G4 Linux' > "$gadget/iProduct"
+    echo rndis > "$gadget/functions"
+    [ ! -e "$gadget/f_rndis/wceis" ] || echo 1 > "$gadget/f_rndis/wceis"
+    echo 1 > "$gadget/enable"
+fi
+
+# Android's vendor gadget can name the interface rndis0 instead of usb0.
+usbiface=
+for candidate in rndis0 usb0; do
+    if [ -d "/sys/class/net/$candidate" ]; then
+        usbiface=$candidate
+        ip link set "$usbiface" up
+        ip addr add 172.16.42.1/24 dev "$usbiface"
+        break
+    fi
+done
+if [ -n "$usbiface" ]; then
+    # No default-route or DNS advertisement: this link is only for debugging.
+    dnsmasq --port=0 --no-resolv --user=root --interface="$usbiface" --bind-interfaces \
+        --dhcp-range=172.16.42.2,172.16.42.20,255.255.255.0,12h \
+        --dhcp-option=3 --dhcp-option=6 --dhcp-authoritative --log-dhcp \
+        --pid-file=/run/dnsmasq.pid --dhcp-leasefile=/run/dnsmasq.leases \
+        > /tmp/dhcp.log 2>&1
+    # Root has no password; password authentication is disabled in the server.
+    # Only the fresh device-debug public key is authorized.
+    sed -i 's/^root:[^:]*/root:/' /etc/shadow
+    mkdir -p /etc/dropbear
+    dropbear -F -r /etc/dropbear/dropbear_ed25519_host_key -E -s \
+        -p 172.16.42.1:22 -P /run/dropbear.pid \
+        > /tmp/ssh.log 2>&1 &
+    mkdir -p /www
+    for logfile in firstboot init dhcp ssh rng dmesg processes random display power blocked console; do
+        ln -sf "/tmp/$logfile.log" "/www/$logfile.log"
+    done
+    # Cross-installing APKs with --no-scripts skips the extras applet symlinks.
+    /bin/busybox-extras httpd -f -p 172.16.42.1:8080 -h /www \
+        > /tmp/http.log 2>&1 &
+    # Emergency initramfs shell, following the port's documented debug method.
+    # USB only; a private per-build token gates the shell, independent of RNG.
+    (
+        set +x
+        while :; do
+            /bin/busybox-extras telnetd -F -K -b 172.16.42.1:2323 \
+                -l /usr/sbin/moto-debug-console >> /tmp/console.log 2>&1
+            sleep 1
+        done
+    ) &
+    (
+        set +x
+        while :; do
+            dmesg > /tmp/dmesg.log
+            ps w > /tmp/processes.log
+            {
+                for process in /proc/[0-9]*; do
+                    [ -r "$process/comm" ] || continue
+                    case "$(cat "$process/comm")" in
+                        dropbear|rngd)
+                            echo "$process: $(cat "$process/comm")"
+                            cat "$process/wchan" "$process/syscall" "$process/stack" 2>/dev/null
+                            ;;
+                    esac
+                done
+            } > /tmp/blocked.log 2>&1
+            {
+                cat /proc/sys/kernel/random/entropy_avail
+                cat /sys/class/misc/hw_random/rng_current 2>/dev/null
+                ls -l /dev/hw* /dev/random /dev/urandom 2>/dev/null
+            } > /tmp/random.log
+            {
+                for field in capacity temp status voltage_now current_now; do
+                    printf '%s: ' "$field"
+                    cat "/sys/class/power_supply/battery/$field" 2>/dev/null
+                done
+            } > /tmp/power.log
+            sleep 2
+        done
+    ) &
+fi
+ip addr >> /tmp/firstboot.log 2>&1
+
+if [ -s /etc/wpa_supplicant.conf ] && [ -x /usr/sbin/moto-network-start ]; then
+    /usr/sbin/moto-network-start > /tmp/network.log 2>&1 &
+fi
+
+set +x
+if ( : > /dev/console ) 2>/dev/null; then
+    cat /tmp/firstboot.log > /dev/console
+    echo 'RAM-only diagnostic image; no persistent filesystems mounted.' > /dev/console
+    while :; do
+        setsid cttyhack /bin/sh < /dev/console > /dev/console 2>&1
+        sleep 1
+    done
+fi
+# The archived kernel forces console=null. Keep PID 1 alive without repeatedly
+# trying to open a disabled console; USB diagnostics remain available.
+while :; do sleep 60; done

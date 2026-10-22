@@ -1,0 +1,52 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+set -eu
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+# Preserve evidence across a reset; files remain private and bounded to four boots.
+if [ -x /usr/sbin/moto-boot-diagnostics ]; then
+    /usr/sbin/moto-boot-diagnostics > /run/moto-diagnostics.log 2>&1 &
+fi
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+hostname moto-g4-linux
+ip link set lo up
+for governor in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do
+    [ -f "$governor" ] || continue
+    case " $(cat "${governor%/*}/scaling_available_governors") " in
+        *' ondemand '*) echo ondemand > "$governor" ;;
+    esac
+done
+echo 0 > /sys/class/graphics/fb0/blank
+/usr/sbin/msm-fb-refresher --loop > /tmp/display.log 2>&1 &
+# Preserve clock progress on disk: this vendor RTC often comes back in 1970.
+floor=$(cat /etc/moto-build-epoch)
+if [ -s /var/lib/moto-clock ]; then
+    saved=$(cat /var/lib/moto-clock)
+    [ "$saved" -le "$floor" ] || floor=$saved
+fi
+[ "$(date +%s)" -ge "$floor" ] || date -u -s "@$floor"
+(
+    while :; do date +%s > /var/lib/moto-clock; sleep 300; done
+) &
+gadget=/sys/class/android_usb/android0
+if [ -d "$gadget" ]; then
+    echo 0 > "$gadget/enable"
+    echo 18d1 > "$gadget/idVendor"
+    echo 4ee3 > "$gadget/idProduct"
+    echo 'Moto G4 Linux' > "$gadget/iProduct"
+    echo rndis > "$gadget/functions"
+    [ ! -e "$gadget/f_rndis/wceis" ] || echo 1 > "$gadget/f_rndis/wceis"
+    echo 1 > "$gadget/enable"
+fi
+for iface in rndis0 usb0; do
+    [ -d "/sys/class/net/$iface" ] || continue
+    ip link set "$iface" up
+    ip addr add 172.16.42.1/24 dev "$iface"
+    dnsmasq --port=0 --no-resolv --user=root --interface="$iface" --bind-interfaces \
+        --dhcp-range=172.16.42.2,172.16.42.20,255.255.255.0,12h \
+        --dhcp-option=3 --dhcp-option=6 --pid-file=/run/dnsmasq.pid \
+        --dhcp-leasefile=/run/dnsmasq.leases > /tmp/dhcp.log 2>&1
+    dropbear -F -r /etc/dropbear/dropbear_ed25519_host_key -E -s \
+        -p 172.16.42.1:22 -P /run/dropbear.pid > /tmp/ssh.log 2>&1 &
+    break
+done
+date > /run/moto-hardware-ready

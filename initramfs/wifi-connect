@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Connect native Wi-Fi using the owner's private configuration.
+set -eu
+configuration=/etc/wpa_supplicant.conf
+if [ ! -s "$configuration" ]; then
+    umask 077
+    printf 'ctrl_interface=/run/wpa_supplicant\nupdate_config=1\n' > "$configuration"
+fi
+moto-wifi-init --stock-firmware
+mkdir -p /run/wpa_supplicant
+if [ ! -s /run/wpa_supplicant.pid ] || ! kill -0 "$(cat /run/wpa_supplicant.pid)" 2>/dev/null; then
+    wpa_supplicant -B -i wlan0 -c "$configuration" -P /run/wpa_supplicant.pid \
+        > /tmp/wpa.log 2>&1
+fi
+# DHCP retries in the background even when booting away from the saved AP.
+if [ ! -s /run/udhcpc-wlan0.pid ] || ! kill -0 "$(cat /run/udhcpc-wlan0.pid)" 2>/dev/null; then
+    udhcpc -b -i wlan0 -p /run/udhcpc-wlan0.pid -t 5 -T 3
+fi
+attempt=0
+until wpa_cli -i wlan0 status | grep -q '^wpa_state=COMPLETED$'; do
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 45 ] || { echo 'Wi-Fi association timed out' >&2; exit 1; }
+    sleep 1
+done
+echo 'Wi-Fi associated; DHCP client maintains the lease.'

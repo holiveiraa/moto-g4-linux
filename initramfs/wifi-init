@@ -1,0 +1,34 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Native athene Wi-Fi bring-up; firmware/calibration storage stays read-only.
+set -eu
+if [ ! -e /lib/firmware/wcnss.mdt ] && [ ! -e /firmware/image/wcnss.mdt ]; then
+    if [ "${1:-}" != --stock-firmware ]; then
+        echo 'Missing WCNSS firmware. Use --stock-firmware to read the stock partition.' >&2
+        exit 1
+    fi
+    firmware_device=
+    for descriptor in /sys/class/block/mmcblk0p*/uevent; do
+        if grep -qx 'PARTNAME=modem' "$descriptor"; then
+            [ -z "$firmware_device" ] || { echo 'Ambiguous modem partition' >&2; exit 1; }
+            partition=${descriptor%/uevent}
+            firmware_device=/dev/${partition##*/}
+        fi
+    done
+    [ -n "$firmware_device" ] || { echo 'No modem partition found' >&2; exit 1; }
+    blkid "$firmware_device" | grep -q 'TYPE="ext4"' || exit 1
+    mkdir -p /firmware
+    mount -t ext4 -o ro,noload "$firmware_device" /firmware
+    [ -e /firmware/image/wcnss.mdt ] || exit 1
+fi
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+if [ ! -d /sys/class/net/wlan0 ]; then
+    # wcnss_node_open() triggers boot. The archived script's 'echo 1' also
+    # writes two bytes, which this branch rejects as an invalid calibration
+    # upload. Open without reading/writing calibration data instead.
+    : < /dev/wcnss_wlan
+    echo sta > /sys/module/wlan/parameters/fwpath
+fi
+[ -d /sys/class/net/wlan0 ] || { echo 'Wi-Fi interface did not initialise' >&2; exit 1; }
+ip link set wlan0 up
+echo 'Native wlan0 is up. Association still requires a Wi-Fi configuration.'

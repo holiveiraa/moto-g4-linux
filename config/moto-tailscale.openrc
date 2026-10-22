@@ -1,0 +1,17 @@
+#!/sbin/openrc-run
+description="Persistent Moto Tailscale identity and supervised VPN daemon"
+supervisor="supervise-daemon"
+command="/usr/sbin/tailscaled"
+command_args="--state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock --tun=tailscale0"
+output_log="/tmp/tailscaled.log"
+error_log="/tmp/tailscaled.log"
+respawn_delay=5
+respawn_max=5
+respawn_period=60
+depend() { need moto-hardware; after moto-network; }
+start_pre() {
+    checkpath --directory --mode 0700 /var/lib/tailscale
+    checkpath --directory --mode 0755 /run/tailscale
+    touch /tmp/tailscaled.log
+    chmod 0600 /tmp/tailscaled.log
+}

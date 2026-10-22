@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Official ARM64 static release, pinned for reproducible bring-up.
+set -eu
+moto-wait-network
+version=1.104.1
+checksum=f60294374967f3dfd8cf57bbbd474d6cfce32d123e3a8ddeab82a87940daa806
+archive=/tmp/tailscale-arm64.tgz
+wget -O "$archive" "https://pkgs.tailscale.com/stable/tailscale_${version}_arm64.tgz"
+printf '%s  %s\n' "$checksum" "$archive" | sha256sum -c -
+tar -xzf "$archive" -C /tmp
+cp "/tmp/tailscale_${version}_arm64/tailscale" /usr/bin/tailscale
+cp "/tmp/tailscale_${version}_arm64/tailscaled" /usr/sbin/tailscaled
+tailscale version

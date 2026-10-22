@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Temporary USB maintenance access. Do not enable in a normal installation.
+# This token is independent of the phone's possibly uninitialised kernel RNG.
+set +x
+stty -echo || exit 1
+printf 'Token: '
+if ! IFS= read -r -t 30 response; then
+    exit 1
+fi
+expected=$(cat /etc/moto-debug-token) || exit 1
+if [ -z "$expected" ] || [ "$response" != "$expected" ]; then
+    printf '\nAccess denied\n'
+    exit 1
+fi
+unset response expected
+printf '\nMOTO_READY\n'
+exec /bin/sh -i

@@ -1,0 +1,24 @@
+name: Source checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, pinned
+        with:
+          persist-credentials: false
+      - name: Check public files and documentation
+        run: python3 scripts/check-repository.py
+      - name: Offline regressions
+        run: python3 scripts/run-tests.py
+      - name: Shell syntax
+        shell: bash
+        run: |
+          while IFS= read -r -d '' file; do bash -n "$file"; done < <(find scripts initramfs -type f \( -name '*.sh' -o -path 'initramfs/*' \) -print0)
+      - name: Verify local Wiki export
+        run: python3 scripts/export-wiki.py --repository-url "https://github.com/${{ github.repository }}"

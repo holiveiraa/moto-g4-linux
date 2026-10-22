@@ -1,0 +1,11 @@
+#!/sbin/openrc-run
+description="Native athene audio before Wi-Fi firmware"
+depend() { need moto-hardware; before moto-network moto-desktop; }
+start() {
+    ebegin "Starting native audio"
+    /usr/sbin/moto-audio-start >> /var/log/moto-audio-start.log 2>&1
+    eend $?
+}
+# Keep ADSP's allocation until the hardware resets. Releasing it while WCNSS
+# runs can reintroduce the firmware memory conflict found during this port.
+stop() { return 0; }

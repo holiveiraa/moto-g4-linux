@@ -1,0 +1,6 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+while :; do
+    tmux -u -L moto -f /etc/X11/tmux-moto.conf new-session -A -s moto -n local
+    sleep .3
+done

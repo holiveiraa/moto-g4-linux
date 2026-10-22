@@ -1,0 +1,15 @@
+#!/sbin/openrc-run
+description="Native Wi-Fi and clock (offline boot supported)"
+depend() { need moto-hardware moto-audio; }
+start() {
+    ebegin "Starting native networking"
+    /usr/sbin/moto-network-start > /tmp/network.log 2>&1 &
+    eend 0
+}
+stop() {
+    if [ ! -x /etc/init.d/moto-tailscale ]; then
+        start-stop-daemon --stop --exec /usr/sbin/tailscaled --retry TERM/5/KILL/1 2>/dev/null || true
+    fi
+    for name in wpa_supplicant udhcpc ntpd; do killall "$name" 2>/dev/null || true; done
+    sync
+}

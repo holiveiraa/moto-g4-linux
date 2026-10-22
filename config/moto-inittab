@@ -1,0 +1,8 @@
+# BusyBox init is PID 1; OpenRC owns startup/shutdown. This kernel forces
+# console=null, so do not spawn getty restart loops.
+::sysinit:/sbin/openrc sysinit >>/run/rc.log 2>&1
+::sysinit:/sbin/openrc boot >>/run/rc.log 2>&1
+::wait:/sbin/openrc default >>/run/rc.log 2>&1
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown >>/run/rc.log 2>&1
+::shutdown:/bin/sync

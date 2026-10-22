@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] fbdev: mdss: expose the existing platform link as device
+
+The downstream framebuffer is intentionally a virtual device for its runtime
+PM implementation. Changing framebuffer_alloc's parent prevents its runtime
+state from becoming active and makes fb_open fail with ENOSYS.
+
+The driver already exports its actual platform device through an mdss_fb link.
+Expose that same target through the standard device link, allowing current
+Xorg fbdevhw to identify its non-PCI subsystem while retaining the downstream
+runtime PM hierarchy.
+
+--- a/drivers/video/msm/mdss/mdss_mdp_overlay.c
++++ b/drivers/video/msm/mdss/mdss_mdp_overlay.c
+@@ -5423,6 +5423,11 @@
+ 	if (rc)
+ 		pr_warn("problem creating link to mdss_fb sysfs\n");
+ 
++	rc = sysfs_create_link_nowarn(&dev->kobj,
++			&mfd->pdev->dev.kobj, "device");
++	if (rc)
++		pr_warn("problem creating framebuffer device link\n");
++
+ 	if (mfd->panel_info->type == MIPI_VIDEO_PANEL) {
+ 		rc = sysfs_create_group(&dev->kobj,
+ 			&dynamic_fps_fs_attrs_group);

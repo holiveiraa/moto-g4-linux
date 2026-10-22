@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-2.0-only
+--- a/drivers/soc/qcom/peripheral-loader.c
++++ b/drivers/soc/qcom/peripheral-loader.c
+@@ -13,6 +13,7 @@
+ #include <linux/module.h>
+ #include <linux/string.h>
+ #include <linux/firmware.h>
++#include <linux/crc32.h>
+ #include <linux/io.h>
+ #include <linux/elf.h>
+ #include <linux/mutex.h>
+@@ -597,6 +598,18 @@
+ 					ret, seg->filesz);
+ 			return -EPERM;
+ 		}
++		/* Diagnostic readback only; never alter authentication or firmware. */
++		if (!strcmp(desc->fw_name, "adsp")) {
++			void *readback;
++			u32 checksum;
++			readback = desc->map_fw_mem(seg->paddr, seg->filesz, map_data);
++			if (!readback)
++				return -ENOMEM;
++			checksum = crc32_le(~0U, readback, seg->filesz) ^ ~0U;
++			pil_info(desc, "moto-audio: segment %d addr %pa bytes %lu crc32 %08x\n",
++				 num, &seg->paddr, seg->filesz, checksum);
++			desc->unmap_fw_mem(readback, seg->filesz, map_data);
++		}
+ 		ret = 0;
+ 	}
+ 

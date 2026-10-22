@@ -1,0 +1,46 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Small boot image; only userdata may be mounted read/write.
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /proc /sys /run /tmp /newroot
+mount -t devpts devpts /dev/pts
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /tmp
+exec > /run/early-boot.log 2>&1
+set -x
+rootdev=
+attempt=0
+while [ "$attempt" -lt 20 ]; do
+    for file in /sys/class/block/mmcblk0p*/uevent; do
+        if grep -qx 'PARTNAME=userdata' "$file"; then
+            part=${file%/uevent}
+            rootdev=/dev/${part##*/}
+        fi
+    done
+    [ -z "$rootdev" ] || break
+    attempt=$((attempt + 1))
+    sleep .2
+done
+if [ "$rootdev" = /dev/mmcblk0p48 ] && blkid "$rootdev" | grep -q 'LABEL="moto-linux"'; then
+    e2fsck -p "$rootdev"
+    result=$?
+    if [ "$result" -le 1 ] && mount -t ext4 -o rw,noatime "$rootdev" /newroot; then
+        if [ -f /newroot/etc/moto-persistent ] && [ -x /newroot/sbin/init ]; then
+            mkdir -p /newroot/dev /newroot/proc /newroot/sys /newroot/run /newroot/tmp
+            floor=$(cat /newroot/etc/moto-build-epoch)
+            if [ -s /newroot/var/lib/moto-clock ]; then
+                saved=$(cat /newroot/var/lib/moto-clock)
+                [ "$saved" -le "$floor" ] || floor=$saved
+            fi
+            [ "$(date +%s)" -ge "$floor" ] || date -u -s "@$floor"
+            for fs in dev proc sys run tmp; do mount --move "/$fs" "/newroot/$fs"; done
+            exec switch_root /newroot /sbin/init
+        fi
+        umount /newroot
+    fi
+fi
+# Key-authenticated USB rescue when root fails. Never formats or falls through.
+exec /sbin/moto-rescue

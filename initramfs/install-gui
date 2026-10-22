@@ -1,0 +1,8 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Native framebuffer terminal and on-screen keyboard, from signed Alpine APKs.
+set -eu
+moto-wait-network
+apk add --no-cache xorg-server xf86-video-fbdev xf86-input-evdev \
+    xterm openbox font-dejavu xrandr xinput xdpyinfo xwininfo \
+    xset xdotool xprop python3 python3-tkinter tmux openssh-client-default

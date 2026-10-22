@@ -1,0 +1,45 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+set -eu
+export DISPLAY=:0
+mkdir -p /run /tmp
+if [ -s /run/moto-desktop.pid ] && kill -0 "$(cat /run/moto-desktop.pid)" 2>/dev/null; then
+    echo 'Moto desktop is already running' >&2
+    exit 1
+fi
+echo $$ > /run/moto-desktop.pid
+touch_reset=/sys/devices/soc.0/78b7000.i2c/i2c-3/3-0020/f54/reset
+[ ! -w "$touch_reset" ] || echo 1 > "$touch_reset"
+if [ ! -e /dev/input/moto-touch ]; then
+    /usr/sbin/moto-inputd > /tmp/inputd.log 2>&1 &
+    attempt=0
+    until [ -e /dev/input/moto-touch ]; do
+        attempt=$((attempt + 1))
+        [ "$attempt" -lt 30 ] || { cat /tmp/inputd.log; exit 1; }
+        sleep .1
+    done
+fi
+Xorg :0 -config /etc/X11/xorg-athene.conf -nolisten tcp -noreset -nocursor -dpi 160 \
+    -logfile /tmp/Xorg.0.log > /tmp/xorg-start.log 2>&1 &
+xpid=$!
+trap 'kill "$xpid" 2>/dev/null || true; rm -f /run/moto-desktop.pid' EXIT INT TERM
+attempt=0
+until xdpyinfo >/dev/null 2>&1; do
+    kill -0 "$xpid" 2>/dev/null || { tail -n 40 /tmp/Xorg.0.log; exit 1; }
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 30 ] || { echo 'Xorg startup timed out' >&2; exit 1; }
+    sleep 1
+done
+xset s off
+xset -dpms
+openbox --config-file /etc/X11/openbox-moto.xml > /tmp/openbox.log 2>&1 &
+xterm -u8 -fa 'DejaVu Sans Mono' -fs 18 -bg '#0c1420' -fg '#f0f5ff' \
+    -cr '#4bd7aa' -b 12 -sb -rightbar -sl 10000 -title 'Moto G4 - Linux nativo' -geometry 44x28+0+104 \
+    -xrm 'XTerm*metaSendsEscape: true' -xrm 'XTerm*altSendsEscape: true' \
+    -xrm 'XTerm*backarrowKey: false' -xrm 'XTerm*cursorBlink: false' \
+    -xrm 'XTerm*VT100.Translations: #override Shift <Key>KP_Add: larger-vt-font()\nShift <Key>KP_Subtract: smaller-vt-font()' \
+    -e /usr/sbin/moto-terminal-session > /tmp/terminal.log 2>&1 &
+sleep 1
+/usr/sbin/moto-shell > /tmp/moto-shell.log 2>&1 &
+# Fingerprint contact detection is deferred; do not keep its TEE/SPI path awake.
+wait "$xpid"

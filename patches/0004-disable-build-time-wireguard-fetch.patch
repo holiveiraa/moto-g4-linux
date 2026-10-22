@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] kbuild: remove implicit latest-WireGuard network fetch
+
+The vendor Kbuild.include invokes a downloader on each recursive make. This
+port disables that old out-of-tree kernel driver and Tailscale uses its own
+userspace WireGuard implementation over TUN. Keep the kernel source pinned
+and avoid both unrequested network downloads and repeated build-time lookups.
+
+--- a/scripts/Kbuild.include
++++ b/scripts/Kbuild.include
+@@ -276,4 +276,3 @@
+ 
+ echo-why = $(call escsq, $(strip $(why)))
+ endif
+-$(shell cd "$(srctree)" && ./scripts/fetch-latest-wireguard.sh)

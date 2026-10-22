@@ -1,0 +1,22 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+set -u
+# The vendor RTC starts in 1970. A build-time floor allows TLS to work before
+# NTP is available; an NTP client subsequently corrects the live system clock.
+if [ -r /etc/moto-build-epoch ]; then
+    floor=$(cat /etc/moto-build-epoch)
+    now=$(date +%s)
+    if [ "$now" -lt "$floor" ]; then date -u -s "@$floor"; fi
+fi
+ntpd -p time.cloudflare.com > /tmp/ntp.log 2>&1 &
+if command -v tailscaled >/dev/null 2>&1 && [ ! -x /etc/init.d/moto-tailscale ]; then
+    # RAM/debug sessions keep the legacy fallback. Installed OpenRC systems use
+    # their own supervised service, independent of Wi-Fi association success.
+    mkdir -p /var/lib/tailscale /run/tailscale
+    chmod 0700 /var/lib/tailscale
+    tailscaled --state=/var/lib/tailscale/tailscaled.state \
+        --socket=/run/tailscale/tailscaled.sock --tun=tailscale0 \
+        > /tmp/tailscaled.log 2>&1 &
+fi
+# A missing access point must not prevent the VPN daemon or desktop starting.
+moto-wifi-connect

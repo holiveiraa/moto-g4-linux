@@ -1,0 +1,10 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# USB diagnostics can be ready before the radio finishes starting.
+set -eu
+attempt=0
+until ip route | grep -q '^default .*dev wlan0'; do
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 60 ] || { echo 'Wi-Fi route not ready' >&2; exit 1; }
+    sleep 1
+done

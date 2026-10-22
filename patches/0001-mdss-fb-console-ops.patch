@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-2.0-only
+Subject: [PATCH] fbdev: msm: provide drawing operations for the Linux console
+
+The vendor framebuffer exposes the panel to userspace but omits the drawing
+callbacks used by fbcon. Register the existing generic CFB helpers before
+enabling FRAMEBUFFER_CONSOLE. The downstream configuration already selects
+the three CFB implementations.
+
+--- a/drivers/video/msm/mdss/mdss_fb.c
++++ b/drivers/video/msm/mdss/mdss_fb.c
+@@ -2300,6 +2300,9 @@
+ 
+ static struct fb_ops mdss_fb_ops = {
+ 	.owner = THIS_MODULE,
++	.fb_fillrect = cfb_fillrect,
++	.fb_copyarea = cfb_copyarea,
++	.fb_imageblit = cfb_imageblit,
+ 	.fb_open = mdss_fb_open,
+ 	.fb_release = mdss_fb_release,
+ 	.fb_check_var = mdss_fb_check_var,	/* vinfo check */

@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: GPL-2.0-only
+--- a/sound/soc/msm/qdsp6v2/msm-pcm-q6-v2.c
++++ b/sound/soc/msm/qdsp6v2/msm-pcm-q6-v2.c
+@@ -293,6 +293,8 @@
+ 			__func__);
+ 		return -EINVAL;
+ 	}
++	if (prtd->reset_event)
++		return -ENETRESET;
+ 	params = &soc_prtd->dpcm[substream->stream].hw_params;
+ 
+ 	pr_debug("%s\n", __func__);
+@@ -334,6 +336,7 @@
+ 		return -ENOMEM;
+ 	}
+ 
++	prtd->playback_session_open = true;
+ 	pr_debug("%s: session ID %d\n", __func__,
+ 			prtd->audio_client->session);
+ 	prtd->session_id = prtd->audio_client->session;
+@@ -342,16 +345,26 @@
+ 			prtd->session_id, substream->stream);
+ 	if (ret) {
+ 		pr_err("%s: stream reg failed ret:%d\n", __func__, ret);
+-		return ret;
+-	}
+-
++		goto close_session;
++	}
++
++	prtd->playback_route_registered = true;
+ 	ret = q6asm_media_format_block_multi_ch_pcm_v3(
+ 				prtd->audio_client, runtime->rate,
+ 				runtime->channels, !prtd->set_channel_map,
+ 				prtd->channel_map, bits_per_sample,
+ 				sample_word_size);
+-	if (ret < 0)
+-		pr_info("%s: CMD Format block failed\n", __func__);
++	if (ret < 0) {
++		pr_err("%s: CMD Format block failed\n", __func__);
++		goto deregister_stream;
++	}
++
++	/* The DSP session and PCM format must exist before setting gain. */
++	ret = q6asm_set_volume(prtd->audio_client, prtd->volume);
++	if (ret < 0) {
++		pr_err("%s: initial playback gain failed: %d\n", __func__, ret);
++		goto deregister_stream;
++	}
+ 
+ 	atomic_set(&prtd->out_count, runtime->periods);
+ 
+@@ -360,6 +373,19 @@
+ 	prtd->cmd_interrupt = 0;
+ 
+ 	return 0;
++
++deregister_stream:
++	msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->be_id,
++					SNDRV_PCM_STREAM_PLAYBACK);
++	prtd->playback_route_registered = false;
++close_session:
++	if (q6asm_cmd(prtd->audio_client, CMD_CLOSE) < 0) {
++		/* State is uncertain. Require close/reopen rather than another prepare. */
++		prtd->reset_event = true;
++	} else {
++		prtd->playback_session_open = false;
++	}
++	return ret;
+ }
+ 
+ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
+@@ -545,8 +571,11 @@
+ 
+ 	prtd->audio_client->dev = soc_prtd->platform->dev;
+ 
+-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
++	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+ 		runtime->hw = msm_pcm_hardware_playback;
++		/* Establish the initial gain without relying on an Android HAL. */
++		prtd->volume = 0x2000; /* Q13 unity, no digital amplification. */
++	}
+ 
+ 	/* Capture path */
+ 	else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+@@ -716,12 +745,14 @@
+ 		if (!ret)
+ 			pr_err("%s: CMD_EOS failed, cmd_pending 0x%lx\n",
+ 			       __func__, prtd->cmd_pending);
+-		q6asm_cmd(prtd->audio_client, CMD_CLOSE);
++		if (prtd->playback_session_open)
++			q6asm_cmd(prtd->audio_client, CMD_CLOSE);
+ 		q6asm_audio_client_buf_free_contiguous(dir,
+ 					prtd->audio_client);
+ 		q6asm_audio_client_free(prtd->audio_client);
+ 	}
+-	msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->be_id,
++	if (prtd->playback_route_registered)
++		msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->be_id,
+ 						SNDRV_PCM_STREAM_PLAYBACK);
+ 	kfree(prtd);
+ 	runtime->private_data = NULL;
+--- a/sound/soc/msm/qdsp6v2/msm-pcm-q6-v2.h
++++ b/sound/soc/msm/qdsp6v2/msm-pcm-q6-v2.h
+@@ -84,6 +84,8 @@
+ 	int abort; /* set when error, like sample rate mismatch */
+ 
+ 	bool reset_event;
++	bool playback_session_open;
++	bool playback_route_registered;
+ 	int enabled;
+ 	int close_ack;
+ 	int cmd_ack;

@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Installed systems use BusyBox init + OpenRC shutdown hooks. RAM images retain
+# the old emergency path, but the UI explicitly explains their volatile state.
+set -eu
+case "${1:-}" in poweroff|reboot) operation=$1 ;; *) exit 2 ;; esac
+if [ -f /etc/moto-persistent ]; then
+    # Distinguish a requested shutdown from a kernel/power failure after reboot.
+    umask 077
+    printf '%s uptime=%s operation=%s\n' "$(date -u +%FT%TZ)" \
+        "$(cat /proc/uptime)" "$operation" >> /var/log/moto-power.log
+fi
+sync
+if [ -f /etc/moto-persistent ] && [ "$(cat /proc/1/comm)" = init ]; then
+    exec "/sbin/$operation"
+fi
+exec "/sbin/$operation" -f

@@ -1,0 +1,8 @@
+#!/sbin/openrc-run
+description="Moto G4 native display and USB rescue"
+depend() { after localmount; before moto-network moto-desktop; }
+start() {
+    ebegin "Starting Moto hardware"
+    /usr/sbin/moto-hardware-start
+    eend $?
+}

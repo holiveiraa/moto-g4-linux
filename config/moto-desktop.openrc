@@ -1,0 +1,10 @@
+#!/sbin/openrc-run
+description="Moto touch terminal and device dashboard"
+supervisor="supervise-daemon"
+command="/usr/sbin/moto-desktop-start"
+output_log="/tmp/desktop.log"
+error_log="/tmp/desktop.log"
+respawn_delay=3
+respawn_max=5
+respawn_period=60
+depend() { need moto-hardware; }

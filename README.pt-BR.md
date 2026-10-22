@@ -1,0 +1,39 @@
+# Moto G4 Linux
+
+Um Linux nativo para dar uma segunda vida ao Moto G4 Plus: teclado de toque,
+abas SSH, Wi-Fi salvo, Tailscale, áudio e ditado. O protótipo liga e desliga sem
+PC e usa Alpine, Xorg, xterm/tmux e uma interface Python/Tk.
+
+**Estado:** código experimental, validado numa unidade XT1640 / athene P2A,
+2 GB / 32 GB. Não há instalador universal nem imagem pública pronta. O kernel é
+3.10.108; suspensão, bloqueio de tela, fones/BT/modem e outros modelos continuam
+pendentes. [Matriz completa](docs/status.md).
+
+## Instale com seu agente
+
+Abra o repositório no Codex, Claude Code ou agente local e envie:
+
+> Quero instalar o Moto G4 Linux no celular conectado por USB. Leia AGENTS.md
+> e docs/agent-installation.md. Inspecione meu aparelho e computador, confirme a
+> compatibilidade, prepare backups privados verificados e faça o build. Antes
+> de desbloquear, formatar ou gravar, mostre o plano exato e aguarde minha
+> autorização. Use minhas próprias chaves e firmware, sem copiar outra identidade.
+
+O [guia para agentes](docs/agent-installation.md) organiza as fases e os critérios
+para avançar. A pessoa ainda aceita os avisos físicos, entra nas próprias contas
+e informa segredos diretamente nos formulários.
+
+Depois: Wi-Fi pelo painel, cadastro Tailscale por QR e favoritos SSH com senha
+opcional. O microfone transcreve com sua chave Groq e insere na aba sem Enter.
+[Guia de uso](docs/user-guide.md).
+
+## Explore
+
+[Documentação](docs/README.md) · [Instalação](docs/installation.md) ·
+[Build](docs/building.md) · [Arquitetura](docs/architecture.md) ·
+[Diagnóstico](docs/troubleshooting.md) · [Contribuir](CONTRIBUTING.md) ·
+[Créditos](CREDITS.md) · [Wiki](docs/wiki.md).
+
+Código próprio, documentação e arte: MIT, com exceções de kernel/lk2nd em
+[LICENSES/README.md](LICENSES/README.md). Firmware, chaves e dados particulares
+não são distribuídos. [README completo em inglês](README.md).

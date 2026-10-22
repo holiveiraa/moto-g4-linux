@@ -1,0 +1,63 @@
+MOTO / LINUX
+
+Teclado
+  Ctrl, Alt e Shift: toque uma vez e depois na outra tecla.
+  #+= abre os simbolos; ABC volta para as letras.
+  Segure apagar ou uma seta para repetir.
+
+Terminal
+  Arraste na vertical para consultar o historico.
+  Segure por meio segundo e arraste para selecionar texto.
+  O menu tem Copiar selecao e Colar.
+  + Nova abre outra aba; toque no nome da aba para trocar.
+  O x em cada aba abre a confirmacao para fechar so aquele terminal.
+  Painel > Sistema > Terminal e teclado > Gerenciar abas mostra a lista com Abrir e Fechar.
+  Fechar a ultima aba deixa um novo terminal local no lugar.
+  As sessoes continuam abertas quando a interface reinicia.
+
+Botoes
+  Power curto: apagar/acender a tela.
+  Power por 1,2 segundo e solte: abrir o menu.
+  Volume: diminuir/aumentar o som; zero deixa mudo. O nivel fica salvo.
+  Tamanho do texto: painel > Sistema > Terminal e teclado > Texto - / Texto +.
+  Leitor frontal: desativado enquanto investigamos seu driver.
+
+Conexao com seu servidor
+  tailscale ssh user@server.example
+
+Painel
+  Toque em Painel. Terminal no rodape volta para sua sessao.
+  Voltar retorna a categoria anterior. O corpo das paginas aceita rolagem.
+  Brilho: toque/arraste na faixa larga ou use -/+. O valor aparece em %.
+  O efeito e imediato; a preferencia e salva ao soltar.
+  Wi-Fi: redes salvas conectam sem repetir senha. Atualizar senha e Esquecer
+  sao acoes separadas. Redes novas: senha e Conectar e salvar.
+  VPN / Tailscale: estado, retomar VPN e autorizar por QR se necessario.
+  SSH: Novo servidor salva nome, endereco, usuario, porta e modo de conexao.
+  Toque num favorito para abrir em aba, editar ou remover da lista.
+  Remover um favorito nao fecha a sessao que ja esta aberta.
+  Senha SSH e opcional: vazio usa a autenticacao normal, inclusive Tailscale SSH.
+  Se preencher, a senha fica salva neste aparelho, separada dos metadados.
+  Ao editar, vazio mantem a senha salva; remover senha tem uma acao propria.
+  Alterar host, usuario ou porta exige informar a senha novamente.
+  Abrir com entrada manual ignora a senha salva e permite responder senha/2FA.
+  Power curto apaga so a tela, sem suspender o Linux.
+  Desligar de verdade: painel > Energia > Desligar > Confirmar.
+  Para ligar novamente: segure Power por alguns segundos.
+  Sistema informa se esta sessao e temporaria ou instalada no aparelho.
+
+Voz e ditado
+  Microfone no teclado, ao lado do Enter: toque para gravar e toque de novo
+  para transcrever com Groq e inserir direto na aba atual, SEM enviar Enter.
+  O botao fica vermelho durante a gravacao. X cancela. Limite: 60 segundos.
+  Se a rede falhar, toque novamente no mic para tentar enviar o mesmo audio.
+  Troca de destino/programa durante a resposta guarda o texto para revisao.
+  Esconder teclado, abrir painel ou apagar tela cancela o ditado rapido.
+  Painel > Voz e audio > Configurar Groq: salvar/testar/remover sua chave.
+  A chave fica em arquivo privado no Moto, fora do terminal e dos logs.
+  Grave ate 60 s, pare e toque em Transcrever para enviar o trecho a Groq.
+  Revise o texto e toque em Inserir no terminal. Enter nao e enviado sozinho.
+  Testar alto-falante reproduz um tom curto no Moto.
+  O microfone funciona no aparelho; so a transcricao precisa de Internet/Groq.
+  Depois de revisar, escolha a aba de destino e insira o texto.
+  Gravar fica desativado enquanto a captura nao estiver disponivel.

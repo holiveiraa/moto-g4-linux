@@ -1,0 +1,24 @@
+name: Bug report
+description: Report behavior with redacted evidence, never private dumps.
+body:
+  - type: markdown
+    attributes:
+      value: "Do not attach credentials, authorization links, serials, raw images, firmware or identity files. Use SECURITY.md for sensitive reports."
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware and software revision
+      description: Model, hardware revision, RAM/storage, source revision. No serial number.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Trigger, expected result and observed result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Verification and redacted evidence
+      description: Distinguish a build result, simulation and physical test.
