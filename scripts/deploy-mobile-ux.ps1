@@ -14,6 +14,8 @@ $files = @(
     @('native/moto-shell.py', '/usr/sbin/moto-shell', '755'),
     @('native/moto-panel.py', '/usr/sbin/moto-panel.py', '644'),
     @('native/moto-widgets.py', '/usr/sbin/moto-widgets.py', '644'),
+    @('native/moto-experience.py', '/usr/sbin/moto-experience.py', '644'),
+    @('native/moto-appearance.py', '/usr/sbin/moto-appearance.py', '644'),
     @('native/moto-wifi.py', '/usr/sbin/moto-wifi.py', '644'),
     @('native/moto-wifi-panel.py', '/usr/sbin/moto-wifi-panel.py', '644'),
     @('native/moto-hosts.py', '/usr/sbin/moto-hosts.py', '644'),
@@ -40,5 +42,5 @@ foreach ($item in $files) {
     & "$PSScriptRoot/device-upload.ps1" -Source (Join-Path $project $item[0]) -RemotePath $item[1] -Mode $item[2]
 
 }
-& "$PSScriptRoot/device-ssh.ps1" -Command 'python3 -m py_compile /usr/sbin/moto-inputd /usr/sbin/moto-shell /usr/sbin/moto-panel.py /usr/sbin/moto-widgets.py /usr/sbin/moto-wifi.py /usr/sbin/moto-wifi-panel.py /usr/sbin/moto-hosts.py /usr/sbin/moto-ssh-panel.py /usr/sbin/moto-ssh-launch /usr/sbin/moto-ssh-askpass /usr/sbin/moto-quick-voice.py /usr/sbin/moto-services.py /usr/sbin/moto-terminals.py /usr/sbin/moto-voice.py /usr/sbin/moto-voice-panel.py /usr/sbin/moto-audio.py /usr/sbin/moto-ui-control && /usr/sbin/moto-ui-control'
+& "$PSScriptRoot/device-ssh.ps1" -Command 'python3 -m py_compile /usr/sbin/moto-experience.py /usr/sbin/moto-appearance.py /usr/sbin/moto-inputd /usr/sbin/moto-shell /usr/sbin/moto-panel.py /usr/sbin/moto-widgets.py /usr/sbin/moto-wifi.py /usr/sbin/moto-wifi-panel.py /usr/sbin/moto-hosts.py /usr/sbin/moto-ssh-panel.py /usr/sbin/moto-ssh-launch /usr/sbin/moto-ssh-askpass /usr/sbin/moto-quick-voice.py /usr/sbin/moto-services.py /usr/sbin/moto-terminals.py /usr/sbin/moto-voice.py /usr/sbin/moto-voice-panel.py /usr/sbin/moto-audio.py /usr/sbin/moto-ui-control && /usr/sbin/moto-ui-control'
 if ($LASTEXITCODE -ne 0) { throw 'Desktop restart failed' }

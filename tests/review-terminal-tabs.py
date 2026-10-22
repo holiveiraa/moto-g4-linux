@@ -133,8 +133,10 @@ def main():
         tap(('new',))
         assert len(tabs.list()) == 4 and shell.menu is None
         tap(('new',))
-        assert len(tabs.list()) == 4 and shell.panel.page == 'terminals'
-        subprocess.run(['xwd', '-root', '-silent', '-out', '/tmp/moto-tabs-manager.xwd'], check=True)
+        assert len(tabs.list()) == 4 and shell.menu is None
+        subprocess.run(['xwd', '-root', '-silent', '-out', '/tmp/moto-tabs-limit.xwd'], check=True)
+        tap(('panel',))
+        assert shell.panel.page == 'home'
         tap(('panel',))
         assert shell.menu is None
         closing = next(row['id'] for row in tabs.list() if row['active'])
@@ -150,7 +152,7 @@ def main():
                 assert w.winfo_rooty()+w.winfo_height() <= shell.h, ('home clipped', str(w))
         tap(('select', chosen))
         assert shell.menu is None and tabs.get(chosen)['active']
-        shell.panel.terminals()
+        shell.panel.system()
         shell.emit('Escape')
         assert shell.menu is None and not sent
         print('PASS: stale confirmation preserves other IDs; + opens/limits tabs; selecting a tab, Voltar and Esc dismiss panels')

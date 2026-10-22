@@ -1,6 +1,6 @@
 # Hardware and project status
 
-Evidence reviewed: **21 October 2026**. The working prototype has been exercised
+Evidence reviewed: **22 October 2026**. The working prototype has been exercised
 on one **Motorola Moto G4 Plus XT1640, athene P2A, 2 GB RAM / 32 GB storage**,
 with its original **Athene_16MP** hardware description. No other variant is
 certified by this project. Product-family similarity does not establish matching
@@ -30,8 +30,9 @@ panel, touch, amplifier, memory layout or partition geometry.
 
 - Suspend/resume, screen locking and controlled idle-battery/thermal results.
 - Headphones, Bluetooth audio, cellular calls/data, camera and fingerprint reader.
-- Landscape/rotation, general multitouch, complete accented-language keyboard
-  and screen-reader accessibility.
+- Landscape/rotation, general multitouch, broader language layouts and
+  screen-reader accessibility. The keyboard now includes Portuguese accents/ç;
+  physical typing ergonomics still need owner acceptance.
 - GPU acceleration or a maintained mainline-kernel desktop.
 - Installation on a second device, including a clean first-use/reboot acceptance
   run and a complete rootfs built independently of the prototype's private state.
@@ -54,6 +55,37 @@ panel, touch, amplifier, memory layout or partition geometry.
 
 These are source/integration checks. They do not establish a clean rootfs install
 on a second phone, long-term reliability or compatibility with other variants.
+
+## Alpine interface refresh — 22 October 2026
+
+The existing XT1640 installation received a userspace-only interface update:
+Jade/Midnight/Paper themes with live preview and revert, terminal/code/Portuguese
+keyboard pages and reduced idle work. Appearance opens directly from the panel;
+tab and keyboard controls remain on the terminal. fzf/ripgrep remain installed
+as optional CLI tools on this prototype, without GUI integration or background
+services; they are not required by fresh installations. The GUI restart preserved
+the existing tmux window ID. Boot images, partitions, firmware and personal network/SSH
+configuration were not changed. Input file hashes and a verified rollback archive
+were retained privately for the owner.
+
+- **101 offline tests passed** in an isolated public-source copy on Linux/WSL.
+- Isolated real-Tk reviews on the Moto covered focus/caret, terminal tabs,
+  connections, voice review, quick dictation, Tailscale states and the new
+  appearance and keyboard paths. Synthetic configuration, a separate Xvfb display and
+  private tmux servers kept the owner's session out of typing/close tests.
+- Current checks cover native accented input, literal UTF-8 without Enter, theme
+  output staying out of terminal stdin, direct panel appearance access, absence
+  of redundant menu entries, immediate control/worker wake and tmux failure
+  during screen wake.
+- In two sequential **20-second isolated idle samples** on this Moto, with the
+  same synthetic awake screen and the network worker disabled in both, Python
+  shell CPU was **11.55% → 1.70% of one core**; PSS was **22,632 → 21,997 KiB**.
+  These short samples measure the shell, not total-device power or an autonomy
+  improvement. They are not evidence of suspend, unplugged battery life or a
+  guaranteed performance result under other workloads.
+
+The owner observed the updated interface. Theme and keyboard ergonomics still
+require normal physical use/acceptance; Xvfb checks alone do not establish them.
 
 ## Distribution maturity
 

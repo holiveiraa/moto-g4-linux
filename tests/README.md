@@ -38,6 +38,13 @@ and provide an isolated `Xvfb :9 -screen 0 1080x1920x24` session. Keep
 | `review-voice-panel.py` | Fake-key forms, review editing and real UTF-8 PTY paste without Enter |
 | `review-quick-voice.py` | Keyboard microphone lifecycle/cancellation and paste without Enter |
 | `review-tailscale-panel.py` | First-use no-URL/QR state, completion, degraded state and separate SSH check |
+| `review-experience.py` | Themes/preview/revert, direct panel access, native field isolation, accented UTF-8 PTY input and event-driven wake/idle error paths |
+
+The experience review uses an isolated xterm and tmux server, synthetic UX/host
+configuration and a fake backlight file. It checks that live theme output never
+reaches the pane's stdin, and that the retained theme and keyboard paths do not
+reintroduce redundant action/draft menus. It does not establish battery life. The offline suite also covers
+preference merging/permissions, palette contrast and keyboard/launcher contracts.
 
 Never use a person's live tmux session for destructive close/typing tests.
 Start/stop only the Xvfb/tmux processes created by the review. Do not overwrite a

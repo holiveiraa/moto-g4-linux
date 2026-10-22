@@ -37,7 +37,7 @@ for service in debug-console wifi-init wifi-connect network-start wait-network i
     cp "/project/initramfs/$service" "$rootfs/usr/sbin/moto-$service"
     chmod 0755 "$rootfs/usr/sbin/moto-$service"
 done
-for module in moto-panel moto-widgets moto-services moto-wifi moto-wifi-panel moto-hosts moto-ssh-panel moto-terminals moto-voice moto-quick-voice moto-voice-panel moto-audio; do
+for module in moto-panel moto-widgets moto-experience moto-appearance moto-services moto-wifi moto-wifi-panel moto-hosts moto-ssh-panel moto-terminals moto-voice moto-quick-voice moto-voice-panel moto-audio; do
     cp "/project/native/$module.py" "$rootfs/usr/sbin/$module.py"
     chmod 0644 "$rootfs/usr/sbin/$module.py"
 done

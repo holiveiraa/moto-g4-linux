@@ -31,6 +31,7 @@ def sibling(name):
 hosts = sibling('moto-hosts')
 wifi_module = sibling('moto-wifi-panel')
 ssh_module = sibling('moto-ssh-panel')
+appearance_module = sibling('moto-appearance')
 
 
 class DevicePanel:
@@ -54,7 +55,9 @@ class DevicePanel:
         self.wifi_ui = wifi_module.WifiPanel(self, services)
         self.ssh = ssh_module.SSHPanel(self)
         self.voice = voice_module.VoicePanel(self)
+        self.voice_backend = voice_module.voice
         self.u = lambda value: max(1, round(value * self.s.w / 360))
+        self.appearance = appearance_module.AppearancePanel(self)
 
     @property
     def entry(self):
@@ -120,6 +123,7 @@ class DevicePanel:
 
     def begin(self, title, page, editing=False, keep_voice=False):
         s = self.s
+        self.appearance.leave(page)
         if hasattr(s, 'quick_voice') and s.quick_voice.active:
             s.quick_voice.cancel()
         if not keep_voice:
@@ -163,7 +167,8 @@ class DevicePanel:
             s.keyboard.lift()
         s.write_geometry()
 
-    def label(self, text, size=28, color=FG, parent=None, **pack):
+    def label(self, text, size=28, color=None, parent=None, **pack):
+        color = FG if color is None else color
         label = tk.Label(parent or self.body, text=text, bg=BG, fg=color,
                          font=('DejaVu Sans', -max(self.u(14), size)), justify='left', anchor='w',
                          wraplength=self.s.w-self.u(46))
@@ -171,7 +176,8 @@ class DevicePanel:
         self.scroll.bind_drag(label)
         return label
 
-    def button(self, text, action, parent=None, side=None, size=30, color=KEY):
+    def button(self, text, action, parent=None, side=None, size=30, color=None):
+        color = KEY if color is None else color
         color = KEY if color == '#223249' else color
         font_size = max(self.u(14), size)
         footer = parent is getattr(self, 'footer', None)
@@ -203,7 +209,7 @@ class DevicePanel:
                 if not self.s.menu or self.generation != generation:
                     return
                 if error:
-                    self.note.configure(text=error, fg='#ffb6a9')
+                    self.note.configure(text=error, fg=widgets.ERROR)
                 else:
                     success(value)
             self.s.events.put(finish)
@@ -232,6 +238,7 @@ class DevicePanel:
         self.button('+', lambda: self.change_volume(1), parent=row, side='left')
         self.button('SSH  ›', self.ssh.home, color=PANEL)
         self.button('Voz e áudio  ›', self.voice.home, color=PANEL)
+        self.button('Aparência  ›', self.appearance.show, color=PANEL)
         self.button('Sistema  ›', self.system, color=PANEL)
         self.note = self.label('', color=MUTED)
         self.update()
@@ -258,7 +265,7 @@ class DevicePanel:
         now = time.monotonic()
         if not force and now < self.next_volume_check:
             return
-        self.next_volume_check = now+.5
+        self.next_volume_check = now+1
         try:
             percent = max(0, min(100, int(json.loads(Path('/var/lib/moto-audio-volume.json').read_text())['percent'])))
             text = f'Volume  {percent}%'
@@ -287,8 +294,6 @@ class DevicePanel:
 
     def terminal_tools(self):
         self.begin('Terminal e teclado', 'terminal-tools')
-        self.button('Gerenciar abas', self.terminals)
-        self.button('+ Nova aba local', self.s.new_terminal)
         row = self.row()
         self.button('Texto −', lambda: self.s.action('font-down'), parent=row, side='left')
         self.button('Texto +', lambda: self.s.action('font-up'), parent=row, side='left')
@@ -302,7 +307,7 @@ class DevicePanel:
         self.label('Apagar a tela mantém o Linux ligado.', color=MUTED)
         self.button('Apagar tela', lambda: (self.s.close_menu(), self.s.action('screen-toggle')))
         self.button('Reiniciar…', lambda: self.power('reboot'))
-        self.button('Desligar…', lambda: self.power('poweroff'), color='#593040')
+        self.button('Desligar…', lambda: self.power('poweroff'), color=widgets.DANGER)
 
     def back(self):
         page = self.page
@@ -322,6 +327,8 @@ class DevicePanel:
             self.energy()
         elif page in ('terminal-tools', 'system-info'):
             self.system()
+        elif page == 'appearance':
+            self.home()
         else:
             self.home()
 
@@ -329,6 +336,7 @@ class DevicePanel:
         request = self.s.device.get('ssh_auth') or {}
         if request.get('url') and request['url'] != self.last_ssh_auth_shown:
             protected = self.s.menu and (self.entry is not None or self.page.startswith('voice-')
+                                         or self.page == 'appearance'
                                          or self.voice.busy or self.voice.stopping)
             if protected:
                 if self.auth_notice is None:
@@ -577,26 +585,6 @@ class DevicePanel:
         self.note = self.label('O servidor pediu uma verificação de segurança para esta sessão SSH. Isso não cadastra o Moto novamente.', 27, MUTED)
         self.auth(url, ssh=True)
 
-    def terminals(self):
-        self.begin('Abas do terminal', 'terminals')
-        self.s.refresh_tmux_once()
-        self.label(f'{len(self.s.windows)} de 4 abas abertas', 27, MUTED)
-        for row in self.s.windows:
-            line = self.row()
-            label = ('● ' if row['active'] else '') + f"{row['index']} · {row['name']}"
-            label = self.s.fit_text(label, self.s.tab_font, self.s.w-450)
-            name_button = self.button(label, lambda ident=row['id']: self.s.select_terminal(ident),
-                        parent=line, side='left', size=27,
-                        color='#205748' if row['active'] else KEY)
-            name_button.pack_configure(fill='x', expand=True)
-            self.button('× Fechar', lambda ident=row['id']: self.close_terminal(ident),
-                        parent=line, side='right', size=27, color='#593040')
-        if len(self.s.windows) < 4:
-            self.button('+ Nova aba local', self.s.new_terminal)
-        else:
-            self.label('Feche uma aba para abrir outra.', 25, MUTED)
-        self.label('Toque no nome para voltar ao terminal. O × fecha apenas a aba escolhida.', 25, MUTED)
-
     def close_terminal(self, ident):
         # Freeze ID and full name at confirmation time, never a shifting index.
         row = self.s.tabs.get(ident)
@@ -609,7 +597,7 @@ class DevicePanel:
         self.label('Fecha esta aba e desconecta sua sessão SSH, se houver. Comandos em execução podem ser interrompidos.', 30)
         if len(self.s.tabs.list()) == 1:
             self.label('Um novo terminal local ficará no lugar, para você continuar usando o Moto.', 27, MUTED)
-        self.button('Fechar esta aba', lambda target=row['id']: self.s.close_terminal(target), color='#593040')
+        self.button('Fechar esta aba', lambda target=row['id']: self.s.close_terminal(target), color=widgets.DANGER)
         self.button('Cancelar · voltar ao terminal', self.s.close_menu)
 
     def system(self):
@@ -624,6 +612,7 @@ class DevicePanel:
         self.begin('Sobre e diagnóstico', 'system-info')
         d = self.s.device
         self.label('Linux nativo · Alpine · aarch64', 32, ACCENT)
+        self.label(f"Memória: {d.get('ram_free', '?')} MB livres de {d.get('ram_total', '?')} MB", 29)
         self.label(f"Inicialização: {'armazenamento interno' if d.get('persistent') else 'RAM temporária'}\n"
                    f"Armazenamento livre: {d.get('disk_free', '?')} MB\n"
                    f"Tempo ligado: {d.get('uptime', 0)//3600} h {(d.get('uptime', 0)//60)%60} min\n"
@@ -637,5 +626,5 @@ class DevicePanel:
                    'A sessão atual ainda está em RAM. Desligar perde as alterações e volta ao sistema gravado no aparelho.', 32)
         self.label('A tela apagada por Power é diferente de desligar o aparelho.', 26, MUTED)
         self.button('Confirmar desligamento' if operation == 'poweroff' else 'Confirmar reinício',
-                    lambda: subprocess.Popen(['/usr/sbin/moto-power', operation]), color='#593040')
+                    lambda: subprocess.Popen(['/usr/sbin/moto-power', operation]), color=widgets.DANGER)
         self.button('Cancelar', self.home)

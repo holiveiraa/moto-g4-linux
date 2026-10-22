@@ -32,6 +32,7 @@ privately before changing the system.
 | --- | --- |
 | Build the kernel, boot components and clean userspace | [Building](building.md) |
 | Understand boot, services, UI and integration contracts | [Architecture](architecture.md) |
+| Review the Alpine UI update and its validation | [Interface refresh](interface-refresh.md) |
 | Verify changes without disturbing live sessions | [Testing](../tests/README.md) |
 | Propose fixes and contribute | [Contributing](../CONTRIBUTING.md) |
 | Understand security limits and report vulnerabilities | [Security](../SECURITY.md) |

@@ -5,13 +5,27 @@ import tkinter as tk
 from tkinter import ttk
 import tkinter.font as tkfont
 from collections import OrderedDict
+import importlib.util
+from pathlib import Path
+import sys
 
-BG, PANEL, KEY = '#0B1118', '#141E2A', '#1E2C3B'
-FG, MUTED, ACCENT = '#F1F5FA', '#A8B8CA', '#68E3BC'
-ERROR, SELECTED = '#FFADB6', '#205745'
+if 'moto_experience' not in sys.modules:
+    _spec = importlib.util.spec_from_file_location('moto_experience', Path(__file__).with_name('moto-experience.py'))
+    _module = importlib.util.module_from_spec(_spec)
+    sys.modules[_spec.name] = _module
+    _spec.loader.exec_module(_module)
+experience = sys.modules['moto_experience']
+globals().update(experience.palette(experience.preferences().get('theme')))
 _backgrounds = OrderedDict()
 _background_bytes = 0
 _BACKGROUND_LIMIT = 8 * 1024 * 1024
+
+
+def apply_theme(name):
+    global _background_bytes
+    globals().update(experience.palette(name))
+    _backgrounds.clear()
+    _background_bytes = 0
 
 
 class TouchButton(tk.Button):

@@ -33,12 +33,7 @@ done
 xset s off
 xset -dpms
 openbox --config-file /etc/X11/openbox-moto.xml > /tmp/openbox.log 2>&1 &
-xterm -u8 -fa 'DejaVu Sans Mono' -fs 18 -bg '#0c1420' -fg '#f0f5ff' \
-    -cr '#4bd7aa' -b 12 -sb -rightbar -sl 10000 -title 'Moto G4 - Linux nativo' -geometry 44x28+0+104 \
-    -xrm 'XTerm*metaSendsEscape: true' -xrm 'XTerm*altSendsEscape: true' \
-    -xrm 'XTerm*backarrowKey: false' -xrm 'XTerm*cursorBlink: false' \
-    -xrm 'XTerm*VT100.Translations: #override Shift <Key>KP_Add: larger-vt-font()\nShift <Key>KP_Subtract: smaller-vt-font()' \
-    -e /usr/sbin/moto-terminal-session > /tmp/terminal.log 2>&1 &
+python3 /usr/sbin/moto-experience.py terminal > /tmp/terminal.log 2>&1 &
 sleep 1
 /usr/sbin/moto-shell > /tmp/moto-shell.log 2>&1 &
 # Fingerprint contact detection is deferred; do not keep its TEE/SPI path awake.

@@ -11,6 +11,13 @@ test independence without it. Screen off does not lock or suspend Linux.
 Volume buttons control speaker volume; zero mutes. Brightness uses the wide
 slider or −/+ buttons. Text size is under **System → Terminal and keyboard**.
 
+## Appearance
+
+**Panel → Appearance** offers Jade, Midnight and Paper. A tap previews the theme
+across the panel, keyboard and terminal. **Save theme** keeps it; Back or returning
+to the terminal cancels an unsaved preview. Changing brightness preserves the
+chosen theme and keyboard.
+
 ## First Wi-Fi and Tailscale login
 
 1. **Panel → Wi-Fi:** choose a network, enter the owner's password and save.
@@ -52,6 +59,12 @@ Esc, Tab, Ctrl, Alt, Shift and arrows have dedicated keys. Tap a modifier, then
 the next key; hold Backspace/arrows to repeat. **#+=** opens symbols. Active form
 fields have a green border/title and a native blinking caret. Tab/Shift-Tab move
 between enabled fields, and keyboard taps retain the field's input destination.
+
+The keyboard toolbar switches between **Term**, **Code** and **PT**. Code brings
+brackets and operators forward; PT adds Portuguese accented letters and ç.
+Shift also uppercases accented letters. The symbol page supplies digits when
+the current layout uses its first row for accents or operators. Layout changes
+retain the active field and do not submit it.
 
 ## Dictation and audio
 

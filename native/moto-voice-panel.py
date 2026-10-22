@@ -36,11 +36,11 @@ class VoicePanel:
         p.label('Ditado para seus terminais', 38, ACCENT)
         p.label('Fale no Moto, revise o texto e insira na aba do Codex ou em outro terminal.', 28, MUTED)
         if not available:
-            p.label('Áudio interno ainda indisponível', 31, '#ffb6a9')
+            p.label('Áudio interno ainda indisponível', 31, theme.ERROR)
             p.label('O driver não disponibilizou o microfone. Você já pode configurar e testar sua chave Groq.', 27, MUTED)
         configured = bool(voice.settings().get('api_key'))
         p.label('Groq: chave cadastrada' if configured else 'Groq: configure sua chave', 29)
-        button = p.button('Gravar ditado · até 60 s', self.start, color='#205748')
+        button = p.button('Gravar ditado · até 60 s', self.start, color=theme.SELECTED)
         if not available or not configured or self.busy:
             button.configure(state='disabled')
         if self.transcript:
@@ -58,7 +58,7 @@ class VoicePanel:
         p.entry = entry
         p.note = p.label('A chave fica somente neste Moto, em arquivo privado. Não aparece no terminal.', 23, MUTED)
         row = p.row()
-        save = p.button('Salvar chave', lambda: self.save(entry, save), parent=row, side='left', color='#205748', size=27)
+        save = p.button('Salvar chave', lambda: self.save(entry, save), parent=row, side='left', color=theme.SELECTED, size=27)
         p.button('Mostrar', lambda: entry.configure(show='' if entry.cget('show') else '●'), parent=row, side='right', size=26)
         p.submit = lambda: self.save(entry, save)
         row = p.row()
@@ -66,7 +66,7 @@ class VoicePanel:
         if not configured:
             test.configure(state='disabled')
         if configured:
-            p.button('Remover chave…', self.remove, size=25, color='#593040')
+            p.button('Remover chave…', self.remove, size=25, color=theme.DANGER)
 
     def save(self, entry, button):
         try:
@@ -75,7 +75,7 @@ class VoicePanel:
             self.configure()
             self.p.note.configure(text='Chave salva. Toque em Testar conexão para validar com a Groq.', fg=ACCENT)
         except (OSError, ValueError):
-            self.p.note.configure(text='Não foi possível salvar. Confira a chave e o armazenamento.', fg='#ffb6a9')
+            self.p.note.configure(text='Não foi possível salvar. Confira a chave e o armazenamento.', fg=theme.ERROR)
 
     def test(self, button):
         if button.cget('state') == 'disabled':
@@ -93,7 +93,7 @@ class VoicePanel:
             def done():
                 if generation == self.p.generation and self.p.s.menu:
                     button.configure(state='normal')
-                    self.p.note.configure(text=text, fg=ACCENT if good else '#ffb6a9')
+                    self.p.note.configure(text=text, fg=ACCENT if good else theme.ERROR)
             self.p.s.events.put(done)
         threading.Thread(target=work, daemon=True).start()
 
@@ -101,7 +101,7 @@ class VoicePanel:
         p = self.p
         p.begin('Remover chave', 'voice-remove')
         p.label('Remove a chave deste aparelho. Não revoga a chave na sua conta Groq.', 30)
-        p.button('Remover do Moto', lambda: (voice.remove_key(), self.home()), color='#593040')
+        p.button('Remover do Moto', lambda: (voice.remove_key(), self.home()), color=theme.DANGER)
         p.button('Cancelar', self.configure)
 
     def start(self):
@@ -118,7 +118,7 @@ class VoicePanel:
             self.recorder.start()
         except (OSError, RuntimeError):
             self.home()
-            p.note.configure(text='Não foi possível iniciar o microfone. Verifique o áudio do aparelho.', fg='#ffb6a9')
+            p.note.configure(text='Não foi possível iniciar o microfone. Verifique o áudio do aparelho.', fg=theme.ERROR)
             return
         p.label('Destino: ' + target[1], 28, MUTED)
         self.timer = p.label('Gravando · 00:00 / 01:00', 40, ACCENT)
@@ -126,7 +126,7 @@ class VoicePanel:
         self.meter.pack(fill='x', pady=20)
         self.bar = self.meter.create_rectangle(0, 0, 0, 55, fill=ACCENT, outline='')
         p.label('Fale perto do microfone. Nada foi enviado ainda.', 28, MUTED)
-        self.stop_button = p.button('Parar gravação', self.stop, color='#593040')
+        self.stop_button = p.button('Parar gravação', self.stop, color=theme.DANGER)
         p.button('Cancelar e apagar', self.home)
         p.note = p.label('Limite de 60 segundos. O microfone é desligado ao sair desta tela.', 24, MUTED)
         generation = p.generation
@@ -161,7 +161,7 @@ class VoicePanel:
                     return
                 if error:
                     self.home()
-                    p.note.configure(text=error, fg='#ffb6a9')
+                    p.note.configure(text=error, fg=theme.ERROR)
                 else:
                     self.ready(info)
             p.s.events.put(done)
@@ -174,7 +174,7 @@ class VoicePanel:
         p.label('%.1f segundos de voz' % info['seconds'], 40, ACCENT)
         p.label('Destino: ' + self.target[1], 28, MUTED)
         p.label('Ao transcrever, este trecho será enviado à Groq usando sua chave API.', 30)
-        send = p.button('Transcrever com Groq', lambda: self.send(send), color='#205748')
+        send = p.button('Transcrever com Groq', lambda: self.send(send), color=theme.SELECTED)
         p.button('Gravar novamente', self.start)
         p.button('Descartar gravação', self.home)
         p.note = p.label('Você revisará o texto antes de inseri-lo. Nenhum Enter é enviado automaticamente.', 25, MUTED)
@@ -197,7 +197,7 @@ class VoicePanel:
                     return
                 if error:
                     button.configure(state='normal', text='Tentar transcrição novamente')
-                    self.p.note.configure(text=error, fg='#ffb6a9')
+                    self.p.note.configure(text=error, fg=theme.ERROR)
                 else:
                     self.transcript = result
                     self.review()
@@ -218,14 +218,14 @@ class VoicePanel:
         p.note = p.label('Revise nomes e comandos. Enter só será enviado por você no terminal.', 23, MUTED)
         row = p.row()
         p.button('Inserir no terminal', lambda: self.insert(text.get('1.0', 'end-1c')),
-                 parent=row, side='left', size=27, color='#205748')
+                 parent=row, side='left', size=27, color=theme.SELECTED)
         p.button('Descartar', self.discard_text, parent=row, side='right', size=26)
 
     def retarget(self):
         try:
             self.target = voice.pane_target()
         except (OSError, RuntimeError):
-            self.p.note.configure(text='Abra um terminal antes de inserir o texto.', fg='#ffb6a9')
+            self.p.note.configure(text='Abra um terminal antes de inserir o texto.', fg=theme.ERROR)
             return
         self.review()
 
@@ -234,7 +234,7 @@ class VoicePanel:
         try:
             voice.insert_text(self.target[0] if self.target else '', text)
         except (ValueError, RuntimeError, OSError) as exc:
-            self.p.note.configure(text=str(exc), fg='#ffb6a9')
+            self.p.note.configure(text=str(exc), fg=theme.ERROR)
             return
         self.p.s.close_menu()
         self.transcript = ''
@@ -254,4 +254,4 @@ class VoicePanel:
             audio = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(audio)
             return audio.test_speaker()
-        p.button('Tocar som de teste', lambda: p.task(play, lambda msg: p.note.configure(text=msg)), color='#205748')
+        p.button('Tocar som de teste', lambda: p.task(play, lambda msg: p.note.configure(text=msg)), color=theme.SELECTED)

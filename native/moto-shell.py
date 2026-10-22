@@ -14,6 +14,8 @@ import queue
 import signal
 from pathlib import Path
 import socket
+import re
+import stat
 import subprocess
 import threading
 import time
@@ -35,6 +37,28 @@ tabs_loader.exec_module(tabs_module)
 quick_spec = importlib.util.spec_from_file_location('moto_quick_voice', Path(__file__).with_name('moto-quick-voice.py'))
 quick_module = importlib.util.module_from_spec(quick_spec)
 quick_spec.loader.exec_module(quick_module)
+experience = panel_module.widgets.experience
+globals().update(experience.palette(experience.preferences().get('theme')))
+
+
+class WakeQueue(queue.Queue):
+    """Workers only enqueue and signal a socket; all Tk calls stay on its thread."""
+    def __init__(self):
+        super().__init__()
+        self.reader, self.writer = socket.socketpair()
+        self.reader.setblocking(False)
+        self.writer.setblocking(False)
+
+    def put(self, item, block=True, timeout=None):
+        super().put(item, block, timeout)
+        try:
+            self.writer.send(b'.')
+        except (BlockingIOError, OSError):
+            pass
+
+    def close(self):
+        self.reader.close()
+        self.writer.close()
 
 
 class Keys:
@@ -108,7 +132,8 @@ class Shell:
         self.sleeping = False
         self.light = int(LIGHT.read_text()) or 160
         self.menu = None
-        self.events = queue.Queue()
+        self.events = WakeQueue()
+        self.refresh_event = threading.Event()
         self.device = {}
         self.panel = panel_module.DevicePanel(self)
         self.quick_voice = quick_module.QuickDictation(self, panel_module.voice_module.voice)
@@ -117,6 +142,11 @@ class Shell:
         self.repeated = False
         self.pressed_rect = None
         self.font_size = 18
+        prefs = experience.preferences()
+        self.theme_name = experience.theme_name(prefs.get('theme'))
+        self.keyboard_page = experience.keyboard_name(prefs.get('keyboard'))
+        self.font_size = experience.font_size(prefs.get('font_size', 18))
+        self.header_signature = None
         self.kh = int(self.h * .415)
         self.hh = 200
         self.windows = []
@@ -128,7 +158,7 @@ class Shell:
         self.vpn = False
         self.vpn_label = 'verificando'
         self.in_copy = False
-        self.pref_path = Path('/root/.config/moto-linux/ux.json')
+        self.pref_path = experience.config_path()
         try:
             prefs = json.loads(self.pref_path.read_text())
             self.light = max(12, min(255, int(prefs.get('brightness', self.light))))
@@ -150,6 +180,8 @@ class Shell:
         self.sock.bind(SOCKET)
         os.chmod(SOCKET, 0o600)
         self.sock.setblocking(False)
+        self.root.createfilehandler(self.sock, tk.READABLE, self.read_socket)
+        self.root.createfilehandler(self.events.reader, tk.READABLE, self.read_events)
         self.toast = 'Ctrl / Alt / Shift: toque e depois a tecla'
         self.toast_until = time.monotonic() + 12
         self.draw()
@@ -158,6 +190,86 @@ class Shell:
         self.root.after(500, self.status)
         self.root.after(1000, self.refresh_tmux)
         threading.Thread(target=self.vpn_worker, daemon=True).start()
+
+    def terminal_context(self):
+        result = self.tmux('display-message', '-p', '-t', 'moto',
+                           '#{pid}|#{pane_id}|#{pane_pid}|#{pane_current_command}|#{alternate_on}|#{pane_in_mode}|#{window_name}')
+        parts = result.stdout.strip().split('|')
+        if result.returncode or len(parts) != 7 or not parts[0].isdigit() or not re.fullmatch(r'%\d+', parts[1]):
+            raise RuntimeError('Terminal indisponível. Volte à aba e tente novamente.')
+        try:
+            started = Path('/proc', parts[0], 'stat').read_text().rsplit(')', 1)[1].split()[19]
+        except (OSError, IndexError):
+            raise RuntimeError('Não foi possível confirmar a sessão do terminal.') from None
+        return tuple(parts)+ (started,)
+
+    def apply_theme(self, name):
+        name = experience.theme_name(name)
+        colors = experience.palette(name)
+        self.theme_name = name
+        globals().update(colors)
+        for module in (panel_module, panel_module.voice_module):
+            module.__dict__.update(colors)
+        for module in (panel_module.widgets, panel_module.voice_module.theme):
+            module.apply_theme(name)
+        self.root.configure(bg=BG)
+        for widget in (self.header, self.keyboard, self.top):
+            widget.configure(bg=BG)
+        self.canvas.configure(bg=PANEL)
+        self.header_signature = None
+        self.draw()
+        self.status(False)
+        self.theme_terminal(name)
+
+    def theme_terminal(self, name):
+        """Color output goes to our xterm's client tty, never a pane's stdin."""
+        try:
+            if not self.keys.target:
+                return
+            prop = subprocess.run(['xprop', '-id', str(self.keys.target), '_NET_WM_PID'],
+                                   capture_output=True, text=True, timeout=1)
+            match = re.search(r'= (\d+)\s*$', prop.stdout)
+            if not match:
+                return
+            xpid = int(match[1])
+            clients = self.tmux('list-clients', '-F', '#{client_tty}|#{client_pid}')
+            for line in clients.stdout.splitlines():
+                tty, sep, pid = line.partition('|')
+                if not sep or not re.fullmatch(r'/dev/pts/\d+', tty) or not pid.isdigit():
+                    continue
+                child = int(pid)
+                for _ in range(8):
+                    if child == xpid:
+                        break
+                    fields = Path('/proc', str(child), 'stat').read_text().rsplit(')', 1)[1].split()
+                    child = int(fields[1])
+                    if child <= 1:
+                        break
+                if child != xpid or os.path.realpath('/proc/'+pid+'/fd/0') != tty:
+                    continue
+                expected = os.stat(tty)
+                fd = os.open(tty, os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK | os.O_NOFOLLOW)
+                try:
+                    actual = os.fstat(fd)
+                    if stat.S_ISCHR(actual.st_mode) and actual.st_rdev == expected.st_rdev and actual.st_ino == expected.st_ino:
+                        os.write(fd, experience.color_sequence(name))
+                        return True
+                finally:
+                    os.close(fd)
+        except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+            # Startup also applies the committed palette, so the UI remains usable.
+            pass
+
+    def choose_keyboard(self, value):
+        self.keyboard_page = experience.keyboard_name(value)
+        self.symbols = False
+        try:
+            experience.save_preferences({'keyboard': self.keyboard_page})
+        except OSError:
+            self.message('Teclado alterado; não foi possível salvar a preferência')
+        self.draw()
+        if self.menu and self.panel.entry is not None:
+            self.panel.activate_input(self.panel.entry, reveal=False)
 
     def window(self, w, h, x, y):
         win = tk.Toplevel(self.root, bg=BG)
@@ -194,14 +306,17 @@ class Shell:
         return subprocess.run(['tmux', '-L', 'moto', *args], capture_output=True, text=True, timeout=1)
 
     def refresh_tmux(self):
+        if self.sleeping:
+            self.root.after(10000, self.refresh_tmux)
+            return
         try:
             self.windows = self.tabs.list()
             result = self.tmux('display-message', '-p', '-t', 'moto', '#{pane_in_mode}')
             self.in_copy = result.stdout.strip() == '1'
             self.status(False)
         except (OSError, RuntimeError, subprocess.TimeoutExpired):
-            self.windows = []
-        self.root.after(1500, self.refresh_tmux)
+            pass
+        self.root.after(5000 if self.menu else 3000, self.refresh_tmux)
 
     def vpn_worker(self):
         while True:
@@ -219,7 +334,9 @@ class Shell:
             except (OSError, ValueError, subprocess.TimeoutExpired):
                 self.vpn = False
                 self.vpn_label = 'indisponível'
-            time.sleep(5)
+            pending = bool(self.device.get('ssh_auth')) or (self.menu and self.panel.page == 'vpn')
+            self.refresh_event.wait(30 if self.sleeping else 5 if pending else 10)
+            self.refresh_event.clear()
 
     def draw(self):
         if not self.visible:
@@ -228,25 +345,20 @@ class Shell:
         c.delete('all')
         self.boxes = []
         self.key_rects = {}
-        c.create_text(24, 26, anchor='w', text='TERMINAL', fill=ACCENT, font=('DejaVu Sans', -22, 'bold'))
-        hint = self.quick_voice.hint() or (' + '.join(sorted(self.mods)) + ' · próxima tecla' if self.mods else 'Mic: toque para gravar · outro toque insere sem Enter')
-        self.keyboard_hint = c.create_text(self.w-24, 26, anchor='e', text=hint, fill=MUTED, font=('DejaVu Sans', -20))
-        rows = [
-            [('Esc', 'Escape'), ('Tab', 'Tab'), ('Ctrl', 'mod:Ctrl'), ('Alt', 'mod:Alt'),
-             ('←', 'Left'), ('↑', 'Up'), ('↓', 'Down'), ('→', 'Right')],
-        ]
-        if not self.symbols:
-            rows += [[(s, s) for s in '1234567890'], [(s, s) for s in 'qwertyuiop'],
-                     [(s, s) for s in 'asdfghjkl'],
-                     [('⇧', 'mod:Shift')] + [(s, s) for s in 'zxcvbnm'] + [('⌫', 'BackSpace')]]
-        else:
-            rows += [[(s, s) for s in '!@#$%&*()='], [(s, s) for s in '[]{}<>_+|~'],
-                     [(s, s) for s in '\\:;\'"`?,.'],
-                     [('Home', 'Home'), ('End', 'End'), ('Pg↑', 'Prior'), ('Pg↓', 'Next'), ('Del', 'Delete'), ('⌫', 'BackSpace')]]
+        for index, (value, label) in enumerate((('terminal', 'Term'), ('code', 'Código'), ('text', 'PT'))):
+            left, right = 12+index*160, 164+index*160
+            c.create_rectangle(left, 8, right, 80, fill=SELECTED if self.keyboard_page == value else PANEL, outline='')
+            c.create_text((left+right)/2, 44, text=label, fill=ACCENT if self.keyboard_page == value else MUTED,
+                          font=('DejaVu Sans', -24, 'bold'))
+            self.boxes.append((left, 8, right, 80, 'keypage:'+value))
+        hint = self.quick_voice.hint() or (' + '.join(sorted(self.mods)) + ' · próxima tecla' if self.mods else 'Mic · falar e inserir sem Enter')
+        self.keyboard_hint = c.create_text(self.w-24, 44, anchor='e', text=self.fit_text(hint, self.info_font, self.w-520),
+                                           fill=MUTED, font=('DejaVu Sans', -20))
+        rows = experience.keyboard_rows(self.keyboard_page, self.symbols)
         rows += [[('ABC' if self.symbols else '#+=', 'symbols'), ('/', '/'), ('-', '-'),
                   ('espaço', ' '), ('×', 'voice-cancel') if self.quick_voice.state != 'idle' else ('.', '.'),
                   ('', 'voice'), ('Enter ↵', 'Return')]]
-        gap, top = 9, 52
+        gap, top = 9, 96
         rh = (self.kh - top - 12) / len(rows)
         for ri, row in enumerate(rows):
             weights = [3 if action == ' ' else 1.65 if action == 'Return' else 1 for _, action in row]
@@ -258,7 +370,7 @@ class Shell:
                 color = ACCENT if selected or action == 'Return' else KEY
                 if action == 'voice':
                     color = {'recording': '#9e3344', 'sending': '#34516b', 'retry': '#805b20',
-                             'result': '#805b20', 'canceling': '#34516b'}.get(self.quick_voice.state, '#205748')
+                             'result': '#805b20', 'canceling': '#34516b'}.get(self.quick_voice.state, SELECTED)
                 textcolor = BG if color == ACCENT else FG
                 rectangle = c.create_rectangle(x, y, x+width, y+rh-gap, fill=color, outline='', tags=('key',))
                 self.key_rects[action] = (rectangle, color)
@@ -286,18 +398,20 @@ class Shell:
     def hit(self, x, y):
         # The visible gutters are not dead zones. Finger drift chooses the
         # nearest key, as on a phone, instead of silently discarding a tap.
-        if not (0 <= x <= self.w and 52 <= y <= self.kh):
+        if y < 96:
+            return next((b[4] for b in self.boxes if b[0] <= x <= b[2] and b[1] <= y <= b[3]), None)
+        if not (0 <= x <= self.w and 96 <= y <= self.kh):
             return None
-        return min(self.boxes, key=lambda b: max(b[0]-x, 0, x-b[2])**2 + max(b[1]-y, 0, y-b[3])**2)[4]
+        return min((b for b in self.boxes if b[1] >= 96), key=lambda b: max(b[0]-x, 0, x-b[2])**2 + max(b[1]-y, 0, y-b[3])**2)[4]
 
     def press(self, event):
         if self.menu and self.panel.entry is not None:
             self.panel.activate_input(self.panel.entry, reveal=False)
         self.active = self.hit(event.x, event.y)
         self.repeated = False
-        if self.active:
+        if self.active in self.key_rects:
             rectangle, _ = self.key_rects[self.active]
-            self.canvas.itemconfigure(rectangle, outline=ACCENT, width=4, fill='#365979')
+            self.canvas.itemconfigure(rectangle, outline=ACCENT, width=4, fill=PRESS)
             self.pressed_rect = rectangle
         if self.active in ('BackSpace', 'Left', 'Right', 'Up', 'Down'):
             self.repeat = self.root.after(450, self.repeat_key)
@@ -315,9 +429,9 @@ class Shell:
             self.unhighlight()
             self.active = next_key
             self.repeated = False
-            if next_key:
+            if next_key in self.key_rects:
                 rectangle, _ = self.key_rects[next_key]
-                self.canvas.itemconfigure(rectangle, outline=ACCENT, width=4, fill='#365979')
+                self.canvas.itemconfigure(rectangle, outline=ACCENT, width=4, fill=PRESS)
                 if next_key in ('BackSpace', 'Left', 'Right', 'Up', 'Down'):
                     self.repeat = self.root.after(450, self.repeat_key)
 
@@ -341,6 +455,9 @@ class Shell:
         self.active = None
 
     def emit(self, action):
+        if action.startswith('keypage:'):
+            self.choose_keyboard(action.partition(':')[2])
+            return
         if action == 'voice':
             self.quick_voice.toggle()
             return
@@ -358,11 +475,20 @@ class Shell:
             self.symbols = not self.symbols
             self.draw()
         else:
-            if self.menu and self.panel.entry:
+            if self.menu:
                 self.panel.key(action, self.mods)
                 if self.mods:
                     self.mods.clear()
                     self.draw()
+                return
+            if len(action) == 1 and not action.isascii() and not ({'Ctrl', 'Alt'} & self.mods):
+                try:
+                    context = self.terminal_context()
+                    self.panel.voice_backend.insert_text(context[1], action.upper() if 'Shift' in self.mods else action)
+                except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired):
+                    self.message('Não foi possível inserir o caractere nesta aba')
+                self.mods.clear()
+                self.draw()
                 return
             if self.in_copy:
                 self.tmux('send-keys', '-t', 'moto', '-X', 'cancel')
@@ -413,7 +539,7 @@ class Shell:
             else:
                 self.tabs.new()
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:
-            self.panel.terminals()
+            self.close_menu()
             self.message(str(exc))
             return
         self.close_menu()
@@ -454,11 +580,18 @@ class Shell:
         if self.sleeping:
             LIGHT.write_text(str(self.light))
             self.sleeping = False
+            self.header_signature = None
+            self.refresh_event.set()
             self.write_geometry()
             try:
                 self.sock.sendto(b'recalibrate', '/run/moto-input.sock')
             except (FileNotFoundError, ConnectionRefusedError):
                 pass
+            try:
+                self.refresh_tmux_once()
+            except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                pass
+            self.status(False)
 
     def action(self, action):
         if action == 'screen-toggle':
@@ -472,6 +605,7 @@ class Shell:
                 self.light = int(LIGHT.read_text()) or self.light
                 LIGHT.write_text('0')
                 self.sleeping = True
+                self.refresh_event.set()
                 self.write_geometry()
         elif action == 'power-menu':
             self.wake()
@@ -497,6 +631,10 @@ class Shell:
             self.font_size = max(10, min(30, self.font_size + (1 if action == 'font-up' else -1)))
             # xterm's standard larger/smaller VT font actions, via Shift+keypad.
             self.keys.send('KP_Add' if action == 'font-up' else 'KP_Subtract', ['Shift_L'])
+            try:
+                experience.save_preferences({'font_size': self.font_size})
+            except OSError:
+                pass
             self.message('Fonte maior' if action == 'font-up' else 'Fonte menor')
         elif action in ('volume-up', 'volume-down'):
             def change():
@@ -518,10 +656,7 @@ class Shell:
         if not self.sleeping:
             LIGHT.write_text(str(value))
         if persist:
-            self.pref_path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = self.pref_path.with_suffix('.tmp')
-            temporary.write_text(json.dumps({'brightness': self.light}))
-            temporary.replace(self.pref_path)
+            experience.save_preferences({'brightness': self.light}, self.pref_path)
 
     def copy_selection(self):
         mode = self.tmux('display-message', '-p', '-t', 'moto', '#{pane_in_mode}').stdout.strip()
@@ -541,6 +676,7 @@ class Shell:
         self.in_copy = False
 
     def close_menu(self):
+        self.panel.appearance.leave('terminal')
         if self.menu:
             self.panel.voice.leave()
             self.menu.destroy()
@@ -565,6 +701,10 @@ class Shell:
         return text + '…'
 
     def status(self, reschedule=True):
+        if reschedule:
+            self.root.after(5000, self.status)
+        if self.sleeping or self.menu:
+            return
         try:
             battery = Path('/sys/class/power_supply/battery/capacity').read_text().strip() + '%'
             wifi = Path('/sys/class/net/wlan0/operstate').read_text().strip() == 'up'
@@ -572,15 +712,19 @@ class Shell:
         except OSError:
             battery, wifi, vpn = '?', False, False
         c = self.top
+        text = self.toast if time.monotonic() < self.toast_until else f'Wi-Fi {"conectado" if wifi else "offline"}   ·   VPN {self.vpn_label}   ·   {battery}'
+        signature = (text, wifi, self.visible, self.theme_name, tuple((r['id'], r['index'], r['name'], r['active']) for r in self.windows))
+        if signature == self.header_signature:
+            return
+        self.header_signature = signature
         c.delete('all')
         c.create_text(24, 31, anchor='w', text='moto / linux', fill=FG, font=('DejaVu Sans', -30, 'bold'))
-        text = self.toast if time.monotonic() < self.toast_until else f'Wi-Fi {"conectado" if wifi else "offline"}   ·   VPN {self.vpn_label}   ·   {battery}'
         c.create_text(24, 76, anchor='w', text=self.fit_text(text, self.info_font, self.w-445),
                       fill=ACCENT if wifi else MUTED, font=self.info_font)
         self.header_boxes = []
         for left, right, label, action in ((self.w-405, self.w-210, 'Teclado', 'keyboard'),
                                           (self.w-200, self.w-8, 'Voltar' if self.menu else 'Painel', 'panel')):
-            c.create_rectangle(left, 10, right, 88, fill=KEY, outline='#3a4b62')
+            c.create_rectangle(left, 10, right, 88, fill=KEY, outline=BORDER)
             c.create_text((left+right)/2, 49, text=label, fill=FG, font=('DejaVu Sans', -26))
             self.header_boxes.append((left, 10, right, 88, (action,)))
         visible = self.windows[:4]
@@ -591,36 +735,50 @@ class Shell:
             left, right = n*width+5, (n+1)*width-5
             close_left = right-80
             c.create_rectangle(left, 105, right, 195, fill=KEY if row['active'] else PANEL,
-                               outline=ACCENT if row['active'] else '#2a394b', width=3 if row['active'] else 1)
+                               outline=ACCENT if row['active'] else BORDER, width=3 if row['active'] else 1)
             label = self.fit_text(f"{row['index']} · {row['name']}", self.tab_font, close_left-left-22)
             c.create_text(left+12, 150, anchor='w', text=label, fill=FG if row['active'] else MUTED,
                           font=self.tab_font)
-            c.create_rectangle(close_left, 112, right-5, 188, fill='#3b2730', outline='')
-            c.create_text((close_left+right-5)/2, 150, text='×', fill='#ffb6a9', font=('DejaVu Sans', -36))
+            c.create_rectangle(close_left, 112, right-5, 188, fill=DANGER, outline='')
+            c.create_text((close_left+right-5)/2, 150, text='×', fill=ERROR, font=('DejaVu Sans', -36))
             self.header_boxes += [(left, 105, close_left, 195, ('select', row['id'])),
                                   (close_left, 105, right, 195, ('close', row['id']))]
-        c.create_rectangle(self.w-140, 105, self.w-5, 195, fill=KEY, outline='#3a4b62')
+        c.create_rectangle(self.w-140, 105, self.w-5, 195, fill=KEY, outline=BORDER)
         c.create_text(self.w-72, 150, text='+ Nova', fill=ACCENT if len(self.windows)<4 else MUTED,
                       font=('DejaVu Sans', -25))
         self.header_boxes.append((self.w-140, 105, self.w-5, 195, ('new',)))
-        if reschedule:
-            self.root.after(5000, self.status)
-
-    def poll(self):
-        while True:
+    def read_events(self, *_):
+        for _ in range(8):
+            try:
+                self.events.reader.recv(4096)
+            except BlockingIOError:
+                break
+        for _ in range(32):
             try:
                 self.events.get_nowait()()
             except queue.Empty:
                 break
+        if not self.events.empty():
+            self.root.after_idle(self.read_events)
+
+    def read_socket(self, *_):
         try:
-            while True:
-                command = self.sock.recv(256).decode()
-                self.action(command)
+            for _ in range(32):
+                command = self.sock.recv(256).decode(errors='ignore')
+                try:
+                    self.action(command)
+                except (OSError, RuntimeError, subprocess.TimeoutExpired):
+                    self.message('Não foi possível concluir a ação. Tente novamente.')
         except BlockingIOError:
             pass
-        self.panel.update()
-        self.quick_voice.tick()
-        self.root.after(50, self.poll)
+
+    def poll(self):
+        if not self.sleeping:
+            self.panel.update()
+            self.quick_voice.tick()
+        recording = self.quick_voice.state == 'recording' or self.panel.voice.recorder.recording
+        delay = 2000 if self.sleeping else 100 if recording else 500 if self.menu else 1000
+        self.root.after(delay, self.poll)
 
     def run(self):
         self.root.mainloop()
@@ -633,5 +791,8 @@ if __name__ == '__main__':
     try:
         shell.run()
     finally:
+        shell.root.deletefilehandler(shell.sock)
+        shell.root.deletefilehandler(shell.events.reader)
+        shell.events.close()
         shell.quick_voice.close()
         shell.panel.voice.leave()

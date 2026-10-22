@@ -25,6 +25,7 @@ flowchart TD
 | Service ordering | `config/moto-*.openrc` | ADSP before WCNSS and desktop/network |
 | Input | `native/moto-inputd.py` | Correct contact lifetime and uinput translation |
 | UI | `moto-shell.py`, `moto-panel.py`, `moto-widgets.py` | Touch keyboard, focus, scroll, fixed actions |
+| Appearance | `moto-experience.py`, `moto-appearance.py` | Built-in palettes, preview/revert, atomic merged preferences and keyboard layouts |
 | Terminals | `moto-terminals.py` | xterm/tmux, immutable window IDs |
 | Network | `moto-wifi*.py`, `moto-services.py` | Saved profiles, guarded operations, distinct VPN state |
 | SSH | `moto-hosts.py`, `moto-ssh-*.py` | Private endpoint-bound credentials, argv, host-key checks |
@@ -45,6 +46,13 @@ flowchart TD
   implements touch interaction rather than a terminal emulator or SSH protocol.
 - **Focus:** logical destination and native Tk focus are synchronized; event-bound
   focus restoration does not run as a permanent focus-stealing timer.
+- **Idle work:** control and worker-completion sockets wake Tk through file
+  handlers. Periodic UI work slows when inactive/blanked; header drawing is
+  skipped when its visible state is unchanged. A failed transcription does not
+  retain a fast recording timer. These changes do not implement suspend.
+- **Themes:** the desktop launcher execs xterm with argv from a built-in palette.
+  Live OSC color output is restricted to a verified xterm ancestor's tmux client
+  tty, never a pane's stdin. Unsaved previews revert on navigation.
 - **Dictation:** capture is local; transcription sends the chosen audio to Groq.
   Paste is tied to the intended pane and never submits Enter automatically.
 
@@ -58,7 +66,7 @@ flowchart TD
 | `/root/.config/moto-linux/ssh-passwords/` | Optional private endpoint-bound passwords |
 | `/root/.config/moto-linux/groq.json` | Optional owner API key |
 | `/var/lib/moto-audio-volume.json` | Volume preference |
-| `/root/.config/moto-linux/ux.json` | Brightness preference |
+| `/root/.config/moto-linux/ux.json` | Brightness, saved theme and keyboard layout preferences |
 
 These paths are personal configuration, not release inputs. Permission-protected
 credential files are not an encrypted vault. See [security](../SECURITY.md).
