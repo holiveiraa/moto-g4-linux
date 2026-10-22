@@ -17,6 +17,8 @@ below; a project listed as inspiration is not claimed as bundled implementation.
 | **BusyBox and OpenRC contributors** | PID 1, basic utilities and startup/shutdown dependency ordering | [BusyBox](https://busybox.net/), [OpenRC](https://github.com/OpenRC/openrc) |
 | **X.Org, xterm and Openbox contributors** | Display/input stack, mature terminal emulation and window management | [X.Org](https://www.x.org/), [xterm](https://invisible-island.net/xterm/), [Openbox](https://openbox.org/) |
 | **Python and Tcl/Tk contributors** | Native control UI, text editing, focus/caret and Python service code | [Python](https://www.python.org/), [Tcl/Tk](https://www.tcl-lang.org/) |
+| **Rust and companion crate contributors** | Optional client runtime; reqwest, tungstenite, rustls/ring, serde, URL/cookie handling and OS RNG | [Rust](https://www.rust-lang.org/), [locked dependencies](companion/Cargo.lock), [license scope](LICENSES/README.md) |
+| **Nous Research / Hermes Agent and Umbrel contributors** | Existing remote agent, voice routes and app authentication protocols used by the optional companion | [Hermes](https://github.com/NousResearch/hermes-agent), [Umbrel](https://github.com/getumbrel/umbrel), [integration research](docs/hermes-assistant.md) |
 | **Nicholas Marriott and tmux contributors** | Terminal sessions independent of GUI lifetime; stable pane/window IDs | [tmux](https://github.com/tmux/tmux) |
 | **wpa_supplicant, iw, dnsmasq and Dropbear contributors** | Wi-Fi control, DHCP and project-key USB maintenance | [wpa_supplicant control API](https://w1.fi/wpa_supplicant/devel/ctrl_iface_page.html), [iw](https://wireless.docs.kernel.org/en/latest/en/users/documentation/iw.html), [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html), [Dropbear](https://matt.ucc.asn.au/dropbear/dropbear.html) |
 | **ALSA contributors** | PCM capture/playback, routing and soft-volume control | [ALSA](https://www.alsa-project.org/) |
@@ -59,3 +61,14 @@ Groq is an external optional transcription service, not a locally implemented
 speech model. Users bring their own account/key and accept its service terms.
 Codex/Claude Code are tools readers may use, not runtime dependencies or project
 sponsors. No endorsement by Motorola, postmarketOS or the other projects is implied.
+
+## Hermes voice companion references
+
+[Xiaozhi ESP32](https://github.com/78/xiaozhi-esp32) and
+[RoboEyes](https://github.com/fluxgarage/RoboEyes) informed the animated-device
+interaction. The fullscreen vector character is original; no GPL RoboEyes
+code/art is included. The local recognizer separately builds MIT-licensed
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) and obtains pinned
+multilingual Whisper weights. WebRTC VAD uses the pinned Rust wrapper/libfvad
+with their individual notices. Downloads/weights and build tools remain outside
+Git. See [research](docs/hermes-assistant.md) and [license scope](LICENSES/README.md).

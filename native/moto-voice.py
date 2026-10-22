@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Bounded ALSA recording and Groq dictation; credentials never enter argv/logs."""
 import array
+import importlib.util
 import json
 import math
 import os
@@ -23,6 +24,9 @@ MODEL = 'whisper-large-v3-turbo'
 API = 'https://api.groq.com/openai/v1/'
 MAX_SECONDS = 60
 MAX_BYTES = 7 * 1024 * 1024
+_capture_spec = importlib.util.spec_from_file_location('moto_capture', Path(__file__).with_name('moto-capture.py'))
+capture = importlib.util.module_from_spec(_capture_spec)
+_capture_spec.loader.exec_module(capture)
 
 
 def settings():
@@ -165,18 +169,30 @@ class Recorder:
         self.started = 0
         self.meter = 0.0
         self.error = ''
+        self.lease = None
+        self.lifecycle = threading.RLock()
 
     @property
     def recording(self):
         return self.process is not None and self.process.poll() is None
 
     def start(self):
-        if self.recording:
-            return
-        device = capture_device()
-        if not device:
-            raise RuntimeError('Microfone indisponível: a placa de áudio ainda não inicializou.')
-        self.discard()
+        with self.lifecycle:
+            if self.recording:
+                return
+            device = capture_device()
+            if not device:
+                raise RuntimeError('Microfone indisponível: a placa de áudio ainda não inicializou.')
+            self.discard()
+            self.lease = capture.CaptureLease()
+            self.lease.acquire()
+            try:
+                self._start_capture(device)
+            except Exception:
+                self.discard()
+                raise
+
+    def _start_capture(self, device):
         self.folder = tempfile.TemporaryDirectory(prefix='moto-ditado-', dir='/run')
         os.chmod(self.folder.name, 0o700)
         self.path = Path(self.folder.name) / 'voz.wav'
@@ -185,11 +201,11 @@ class Recorder:
         # 48 kHz is native to many QDSP PCM paths; Groq performs downsampling.
         self.process = subprocess.Popen(['arecord', '-D', device, '-t', 'wav', '-f', 'S16_LE',
                                          '-r', '48000', '-c', '1', '-d', str(MAX_SECONDS), str(self.path)],
-                                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        threading.Thread(target=self._meter, daemon=True).start()
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                        pass_fds=(self.lease.fileno(),))
+        threading.Thread(target=self._meter, args=(self.process, self.path), daemon=True).start()
 
-    def _meter(self):
-        process, path = self.process, self.path
+    def _meter(self, process, path):
         while process.poll() is None:
             try:
                 with path.open('rb') as stream:
@@ -207,31 +223,39 @@ class Recorder:
             self.error = 'Não foi possível capturar áudio nesta entrada.'
 
     def stop(self):
-        process, path = self.process, self.path
-        if process is not None and process.poll() is None:
-            process.send_signal(signal.SIGINT)
-            try:
-                process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=2)
-        if not path or not path.is_file():
-            raise RuntimeError(self.error or 'Ainda não há gravação.')
-        return path
+        with self.lifecycle:
+            process, path = self.process, self.path
+            if process is not None and process.poll() is None:
+                process.send_signal(signal.SIGINT)
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=2)
+            if self.lease:
+                self.lease.release()
+                self.lease = None
+            if not path or not path.is_file():
+                raise RuntimeError(self.error or 'Ainda não há gravação.')
+            return path
 
     def discard(self):
-        process, folder = self.process, self.folder
-        self.process, self.folder, self.path = None, None, None
-        if process is not None and process.poll() is None:
-            process.send_signal(signal.SIGINT)
-            try:
-                process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=2)
-        if folder:
-            folder.cleanup()
-        self.meter = 0.0
+        with self.lifecycle:
+            process, folder = self.process, self.folder
+            self.process, self.folder, self.path = None, None, None
+            if process is not None and process.poll() is None:
+                process.send_signal(signal.SIGINT)
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=2)
+            if folder:
+                folder.cleanup()
+            if self.lease:
+                self.lease.release()
+                self.lease = None
+            self.meter = 0.0
 
 
 def safe_text(text):

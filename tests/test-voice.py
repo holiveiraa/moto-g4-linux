@@ -24,10 +24,13 @@ class VoiceTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
         self.old = v.CONFIG
+        self.old_lock = v.capture.LOCK
+        v.capture.LOCK = Path(self.folder.name)/'capture.lock'
         v.CONFIG = Path(self.folder.name)/'private/groq.json'
 
     def tearDown(self):
         v.CONFIG = self.old
+        v.capture.LOCK = self.old_lock
         self.folder.cleanup()
 
     def wav(self, amplitude=2000, seconds=1):
@@ -139,6 +142,20 @@ class VoiceTests(unittest.TestCase):
                 recorder.discard()
                 self.assertIsNotNone(processes[0].poll())
                 self.assertFalse(folder.exists())
+                # Navigation can discard while the stop/transcription worker is
+                # finishing. Both must reap the owned child and release capture.
+                recorder.start()
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    futures = [pool.submit(recorder.stop), pool.submit(recorder.discard)]
+                    for future in futures:
+                        try:
+                            future.result(timeout=5)
+                        except RuntimeError:
+                            pass  # Discard won: no recording remains to transcribe.
+                self.assertIsNotNone(processes[-1].poll())
+                lease = v.capture.CaptureLease()
+                lease.acquire(); lease.release()
             finally:
                 recorder.discard()
 

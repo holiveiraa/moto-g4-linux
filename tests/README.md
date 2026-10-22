@@ -20,10 +20,30 @@ The tests have hyphenated filenames and are run explicitly; do not assume a
 default unittest filename-discovery command includes them all. POSIX file locks,
 termios and symlinks are intentional; use WSL rather than native Windows Python.
 
+## Rust companion fixtures
+
+With the pinned Rust toolchain and OpenSSL CLI installed, run `cargo test
+--locked` inside `companion/`. Tests exercise real loopback HTTP/WS for
+password-only and challenged 2FA login, handoff/cookies, event scoping, lost
+responses/restart, interrupt finalization and fake ALSA PCM/failure. Fresh
+TLS fixtures exercise HTTPS/WSS CA trust and hostname rejection. No owner
+server, Groq or Edge service is contacted. Python `test-hermes.py` also checks
+capture ownership, private IPC, stale results, deferred credential deletion
+and half-duplex behavior. See [setup](../docs/hermes-setup.md).
+
+For a native ARM64 review, cross-build the fixture executables with the pinned
+`cargo zigbuild --release --tests --locked --target aarch64-unknown-linux-musl`.
+Inside a private review directory on that device, `MOTO_HERMES_BINARY` selects
+the matching staged companion binary for gateway tests. If the device lacks an
+OpenSSL CLI, `MOTO_HERMES_TLS_FIXTURE` can point to a private directory containing
+fresh synthetic `ca.pem`, `leaf.pem` and `leaf.key` generated for that review,
+with a localhost DNS SAN and short validity. Never supply a production CA/key.
+Record which suites actually ran; a cross-build alone is not a native result.
+
 ## Isolated UI / PTY reviews
 
 `review-*.py` files are **not** in the default runner. They require a native
-ARM64 Moto environment with Tk/Xorg tools (and sometimes a private tmux server).
+Linux environment with Tk/Xorg tools (some are Moto-specific) (and sometimes a private tmux server).
 Read each file before running. Stage current modules and tests together in a
 private temporary directory, set `MOTO_UI_REVIEW_DIR` to that module directory
 and provide an isolated `Xvfb :9 -screen 0 1080x1920x24` session. Keep
@@ -38,6 +58,7 @@ and provide an isolated `Xvfb :9 -screen 0 1080x1920x24` session. Keep
 | `review-voice-panel.py` | Fake-key forms, review editing and real UTF-8 PTY paste without Enter |
 | `review-quick-voice.py` | Keyboard microphone lifecycle/cancellation and paste without Enter |
 | `review-tailscale-panel.py` | First-use no-URL/QR state, completion, degraded state and separate SSH check |
+| `review-hermes.py` | Fullscreen animated Rust vector face, hidden keyboard/header, native Text/caret, password-only and optional 2FA forms, no PTY leak and app cleanup with tmux preserved |
 | `review-experience.py` | Themes/preview/revert, direct panel access, native field isolation, accented UTF-8 PTY input and event-driven wake/idle error paths |
 
 The experience review uses an isolated xterm and tmux server, synthetic UX/host
@@ -45,6 +66,11 @@ configuration and a fake backlight file. It checks that live theme output never
 reaches the pane's stdin, and that the retained theme and keyboard paths do not
 reintroduce redundant action/draft menus. It does not establish battery life. The offline suite also covers
 preference merging/permissions, palette contrast and keyboard/launcher contracts.
+
+The Hermes review also runs on a host with `xvfb-run`, `xterm`, `tmux`,
+`xdotool`, `xwd` and Python/Tk. Set `MOTO_HERMES_BINARY` to the built host binary
+and optionally `MOTO_HERMES_REVIEW_OUTPUT` to a private screenshot folder; its
+account/network events are synthetic while Rust renders the actual face.
 
 Never use a person's live tmux session for destructive close/typing tests.
 Start/stop only the Xvfb/tmux processes created by the review. Do not overwrite a
@@ -73,3 +99,10 @@ Only the owner can confirm physical feel, audio output and unplugged Power-on.
 Use [status](../docs/status.md) and the final phase of
 [agent installation](../docs/agent-installation.md). A simulated API response,
 source test or successful compilation must not be reported as a hardware result.
+
+The Hermes offline regressions also exercise local wake/upload gating at the UI
+boundary, automatic rearming after speech, stale transcription epochs, exact
+new-conversation handling, uncertain-turn guards and forced-child cleanup. Rust
+fixtures cover speech endpoint bounds, constant background rejection via actual
+WebRTC VAD and persistent/failing new-session creation. These do not establish
+acoustic wake accuracy, CPU/heat/battery or audible speech on a handset.

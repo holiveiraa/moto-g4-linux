@@ -47,6 +47,29 @@ and [PnPUtil command reference](https://learn.microsoft.com/en-us/windows-hardwa
 Do not reset all network adapters, replace drivers from random downloads or
 disable host-key checking as a shortcut.
 
+### RNDIS stays present but stops answering
+
+On 22 October 2026, maintenance uploads on the reference setup stopped while
+the phone's UI remained responsive. Windows still showed the RNDIS adapter as
+Up with an IPv4 address, but ARP, SSH and DHCP renewal failed. System event
+**Microsoft-Windows-NDIS 10400** reported that the device had stopped responding
+to driver commands. The installed Microsoft USB transport was `usb80236.sys`
+version `10.0.26100.1`, NDIS 6.30.
+
+Inspect that event and the exact USB composite device/adapter before retrying
+uploads or attributing the failure to a cable. A scoped administrator
+`pnputil /restart-device "<inspected Moto instance ID>"` restored access and
+allowed the verified userspace installation to finish. A later NDIS reset
+recurred: **the underlying cause remains unresolved**. That restart is a recovery
+step, not a permanent fix. No driver replacement or global USB/power setting
+change was validated. Keep kernel/USB and host events private while diagnosing.
+
+For installations, finish and hash-check the complete staged package before
+changing live files. Run the guarded transaction separately from the SSH
+transport and retain a verified rollback. A dropped upload is not installation
+success. Ordinary Hermes operation uses the phone's existing network connection;
+USB is the maintenance transport in this workflow.
+
 ## Useful local evidence
 
 Read, do not automatically publish: `/tmp/moto-shell.log`, `/tmp/inputd.log`,

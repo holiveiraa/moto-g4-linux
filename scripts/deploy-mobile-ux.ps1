@@ -25,6 +25,10 @@ $files = @(
     @('native/moto-services.py', '/usr/sbin/moto-services.py', '644'),
     @('native/moto-terminals.py', '/usr/sbin/moto-terminals.py', '644'),
     @('native/moto-voice.py', '/usr/sbin/moto-voice.py', '644'),
+    @('native/moto-capture.py', '/usr/sbin/moto-capture.py', '644'),
+    @('native/moto-hermes.py', '/usr/sbin/moto-hermes.py', '644'),
+    @('native/moto-hermes-panel.py', '/usr/sbin/moto-hermes-panel.py', '644'),
+    @('native/moto-hermes-pet.py', '/usr/sbin/moto-hermes-pet.py', '644'),
     @('native/moto-quick-voice.py', '/usr/sbin/moto-quick-voice.py', '644'),
     @('native/moto-voice-panel.py', '/usr/sbin/moto-voice-panel.py', '644'),
     @('native/moto-audio.py', '/usr/sbin/moto-audio.py', '644'),
@@ -42,5 +46,5 @@ foreach ($item in $files) {
     & "$PSScriptRoot/device-upload.ps1" -Source (Join-Path $project $item[0]) -RemotePath $item[1] -Mode $item[2]
 
 }
-& "$PSScriptRoot/device-ssh.ps1" -Command 'python3 -m py_compile /usr/sbin/moto-experience.py /usr/sbin/moto-appearance.py /usr/sbin/moto-inputd /usr/sbin/moto-shell /usr/sbin/moto-panel.py /usr/sbin/moto-widgets.py /usr/sbin/moto-wifi.py /usr/sbin/moto-wifi-panel.py /usr/sbin/moto-hosts.py /usr/sbin/moto-ssh-panel.py /usr/sbin/moto-ssh-launch /usr/sbin/moto-ssh-askpass /usr/sbin/moto-quick-voice.py /usr/sbin/moto-services.py /usr/sbin/moto-terminals.py /usr/sbin/moto-voice.py /usr/sbin/moto-voice-panel.py /usr/sbin/moto-audio.py /usr/sbin/moto-ui-control && /usr/sbin/moto-ui-control'
+& "$PSScriptRoot/device-ssh.ps1" -Command 'python3 -m py_compile /usr/sbin/moto-capture.py /usr/sbin/moto-hermes.py /usr/sbin/moto-hermes-pet.py /usr/sbin/moto-hermes-panel.py /usr/sbin/moto-experience.py /usr/sbin/moto-appearance.py /usr/sbin/moto-inputd /usr/sbin/moto-shell /usr/sbin/moto-panel.py /usr/sbin/moto-widgets.py /usr/sbin/moto-wifi.py /usr/sbin/moto-wifi-panel.py /usr/sbin/moto-hosts.py /usr/sbin/moto-ssh-panel.py /usr/sbin/moto-ssh-launch /usr/sbin/moto-ssh-askpass /usr/sbin/moto-quick-voice.py /usr/sbin/moto-services.py /usr/sbin/moto-terminals.py /usr/sbin/moto-voice.py /usr/sbin/moto-voice-panel.py /usr/sbin/moto-audio.py /usr/sbin/moto-ui-control && /usr/sbin/moto-ui-control'
 if ($LASTEXITCODE -ne 0) { throw 'Desktop restart failed' }

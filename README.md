@@ -29,6 +29,16 @@ shell. The working prototype powers on and shuts down without a PC.
 - **Touch-first controls:** visible field focus/carets, brightness, volume,
   native speaker/microphone and a power menu.
 
+**Optional Hermes companion (experimental):** a fullscreen animated face with
+local “Olá Hermes” activation, automatic voice turns, “Nova conversa” and return
+to the terminal. Rust core, Groq transcription and server-side Edge speech,
+with Umbrel password-only or optional 2FA login.
+[Setup and current limits](docs/hermes-setup.md). The fullscreen revision passes
+host/native fixtures and fullscreen UI review, and is installed on the reference
+Moto. Actual-owner wake/voice and first connection setup remain pending. For server setup, give Hermes its
+[app-local instructions](docs/hermes-server-agent.md). Never administer the
+Umbrel host for this integration.
+
 ## A look at the interface
 
 <p align="center">
@@ -81,6 +91,7 @@ locking and a maintained kernel remain open work.
 | --- | --- |
 | Install with an agent | [Agent workflow](docs/agent-installation.md) |
 | Understand prerequisites/recovery | [Installation](docs/installation.md) |
+| Set up the optional Hermes app | [Companion setup](docs/hermes-setup.md), [research](docs/hermes-assistant.md) |
 | Use the phone | [User guide](docs/user-guide.md) |
 | Build kernel/boot components | [Building](docs/building.md) |
 | Understand the system | [Architecture](docs/architecture.md) |
@@ -89,6 +100,7 @@ locking and a maintained kernel remain open work.
 | Prepare the GitHub Wiki | [Wiki guide](docs/wiki.md) |
 
 ```text
+companion/    Optional Rust Hermes client, original face and protocol fixtures
 native/       Touch shell, input, audio, network and boot adaptations
 config/       OpenRC, Xorg, tmux and audio configuration
 initramfs/    RAM/rescue and persistent-boot startup helpers

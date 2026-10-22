@@ -32,6 +32,7 @@ hosts = sibling('moto-hosts')
 wifi_module = sibling('moto-wifi-panel')
 ssh_module = sibling('moto-ssh-panel')
 appearance_module = sibling('moto-appearance')
+hermes_module = sibling('moto-hermes-panel')
 
 
 class DevicePanel:
@@ -58,6 +59,7 @@ class DevicePanel:
         self.voice_backend = voice_module.voice
         self.u = lambda value: max(1, round(value * self.s.w / 360))
         self.appearance = appearance_module.AppearancePanel(self)
+        self.hermes = hermes_module.HermesPanel(self)
 
     @property
     def entry(self):
@@ -121,9 +123,10 @@ class DevicePanel:
             self.entry = fields[(index+(-1 if reverse else 1)) % len(fields)]
         return 'break'
 
-    def begin(self, title, page, editing=False, keep_voice=False):
+    def begin(self, title, page, editing=False, keep_voice=False, immersive=False):
         s = self.s
         self.appearance.leave(page)
+        self.hermes.leave(page)
         if hasattr(s, 'quick_voice') and s.quick_voice.active:
             s.quick_voice.cancel()
         if not keep_voice:
@@ -141,6 +144,18 @@ class DevicePanel:
         height = s.h - (s.kh if editing else 0)
         s.menu = s.window(s.w, height, 0, 0)
         s.header.withdraw()
+        if immersive:
+            self.notice_bar = tk.Frame(s.menu, bg=BG)
+            self.auth_notice = None
+            self.footer = tk.Frame(s.menu, bg=BG)
+            self.body = tk.Frame(s.menu, bg='#05090e')
+            self.body.pack(fill='both', expand=True)
+            s.mods.clear()
+            s.draw()
+            s.resize_terminal()
+            s.menu.lift()
+            s.write_geometry()
+            return
         bar = tk.Frame(s.menu, bg=BG)
         bar.pack(fill='x', padx=self.u(16), pady=(self.u(12), self.u(8)))
         tk.Label(bar, text=title, bg=BG, fg=FG, anchor='w', wraplength=s.w-self.u(32),
@@ -238,6 +253,7 @@ class DevicePanel:
         self.button('+', lambda: self.change_volume(1), parent=row, side='left')
         self.button('SSH  ›', self.ssh.home, color=PANEL)
         self.button('Voz e áudio  ›', self.voice.home, color=PANEL)
+        self.button('Hermes  ›', self.hermes.home, color=PANEL)
         self.button('Aparência  ›', self.appearance.show, color=PANEL)
         self.button('Sistema  ›', self.system, color=PANEL)
         self.note = self.label('', color=MUTED)
@@ -323,6 +339,9 @@ class DevicePanel:
             self.vpn()
         elif page.startswith('voice-'):
             self.voice.home()
+        elif page.startswith('hermes-'):
+            self.hermes.login_password = ''
+            self.hermes.home()
         elif page == 'power':
             self.energy()
         elif page in ('terminal-tools', 'system-info'):
@@ -336,7 +355,7 @@ class DevicePanel:
         request = self.s.device.get('ssh_auth') or {}
         if request.get('url') and request['url'] != self.last_ssh_auth_shown:
             protected = self.s.menu and (self.entry is not None or self.page.startswith('voice-')
-                                         or self.page == 'appearance'
+                                         or self.page == 'appearance' or self.page.startswith('hermes')
                                          or self.voice.busy or self.voice.stopping)
             if protected:
                 if self.auth_notice is None:

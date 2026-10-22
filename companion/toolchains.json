@@ -1,0 +1,7 @@
+{
+  "rust": "1.99.1",
+  "cargo_zigbuild": "0.24.0",
+  "zig": "0.15.2",
+  "zig_linux_x86_64_sha256": "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239",
+  "device_target": "aarch64-unknown-linux-musl"
+}

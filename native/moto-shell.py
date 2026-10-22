@@ -598,6 +598,7 @@ class Shell:
             if self.sleeping:
                 self.wake()
             else:
+                self.panel.hermes.close()
                 if self.quick_voice.active:
                     self.quick_voice.cancel()
                 if self.panel.voice.recorder.recording:
@@ -677,6 +678,7 @@ class Shell:
 
     def close_menu(self):
         self.panel.appearance.leave('terminal')
+        self.panel.hermes.close()
         if self.menu:
             self.panel.voice.leave()
             self.menu.destroy()
@@ -796,3 +798,4 @@ if __name__ == '__main__':
         shell.events.close()
         shell.quick_voice.close()
         shell.panel.voice.leave()
+        shell.panel.hermes.close()

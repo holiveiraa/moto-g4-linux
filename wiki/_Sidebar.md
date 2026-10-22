@@ -17,6 +17,9 @@
 
 - [Building]({{REPOSITORY_URL}}/wiki/Building)
 - [Architecture]({{REPOSITORY_URL}}/wiki/Architecture)
+- [Hermes app plan]({{REPOSITORY_URL}}/wiki/Hermes-Assistant-Plan)
+- [Hermes setup]({{REPOSITORY_URL}}/wiki/Hermes-Setup)
+- [Hermes-side agent]({{REPOSITORY_URL}}/wiki/Hermes-Server-Agent)
 - [Testing]({{REPOSITORY_URL}}/wiki/Testing)
 - [Contributing]({{REPOSITORY_URL}}/wiki/Contributing)
 

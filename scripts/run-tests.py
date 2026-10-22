@@ -9,7 +9,7 @@ ROOT=Path(__file__).resolve().parents[1]
 TESTS=('test-mobile-input.py','test-wifi-profiles.py','test-audio-start.py',
        'test-voice.py','test-quick-voice.py','test-ssh-hosts.py','test-ssh-password.py',
        'test-tailscale-ux.py','test-groq-configure.py','test-clean-userspace.py','test-wiki-export.py',
-       'test-experience.py')
+       'test-experience.py','test-hermes.py')
 
 
 def main():

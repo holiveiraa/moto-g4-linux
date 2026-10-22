@@ -11,7 +11,7 @@ from urllib.parse import unquote,urlsplit
 import xml.etree.ElementTree as ET
 
 ROOT=Path(__file__).resolve().parents[1]
-FORBIDDEN={'.private','.local-tools','out','build','sources','.venv','__pycache__'}
+FORBIDDEN={'.private','.local-tools','out','build','sources','target','.venv','__pycache__'}
 BAD_SUFFIX={'.img','.apk','.msi','.key','.pem','.state','.wav','.xwd','.dtb','.dtbo','.bin','.zip','.tgz'}
 PATTERNS={
  'private key':re.compile(r'-----BEGIN (?:OPENSSH|RSA|EC|DSA|ENCRYPTED|) ?PRIVATE KEY-----'),

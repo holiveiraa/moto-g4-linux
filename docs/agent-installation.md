@@ -107,6 +107,14 @@ owner authorizes in an external browser → status updates automatically. Add th
 owner's SSH destinations, optional passwords and Groq key through the UI.
 VPN registration is separate from an SSH session's authorization QR.
 
+If the owner wants the optional Hermes face/voice app, follow the separate
+[companion setup](hermes-setup.md) after the base terminal/audio work. Build the
+Rust component for this exact target and verify its old-kernel runtime before
+claiming it works. Use this installation's own Hermes/Umbrel account, CA trust
+and Groq key. Password-only and optional 2FA login are supported; no preconfigured
+cookie, conversation ID or API key belongs in a fresh image. The companion is a
+source preview and has not yet passed physical Moto acceptance.
+
 ## Phase 6 — owner acceptance, unplugged
 
 Prove shutdown and Power-on without USB first. Then verify screen off/on, touch,

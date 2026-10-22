@@ -33,6 +33,9 @@ privately before changing the system.
 | Build the kernel, boot components and clean userspace | [Building](building.md) |
 | Understand boot, services, UI and integration contracts | [Architecture](architecture.md) |
 | Review the Alpine UI update and its validation | [Interface refresh](interface-refresh.md) |
+| Review the proposed Rust voice companion and Umbrel integration | [Hermes app research and plan](hermes-assistant.md) |
+| Build and configure the optional voice companion with your own account | [Hermes setup](hermes-setup.md) |
+| Let Hermes prepare its own app side, without Umbrel host access | [Hermes-side agent instructions](hermes-server-agent.md) |
 | Verify changes without disturbing live sessions | [Testing](../tests/README.md) |
 | Propose fixes and contribute | [Contributing](../CONTRIBUTING.md) |
 | Understand security limits and report vulnerabilities | [Security](../SECURITY.md) |

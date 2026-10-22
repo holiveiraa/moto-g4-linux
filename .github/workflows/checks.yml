@@ -22,3 +22,18 @@ jobs:
           while IFS= read -r -d '' file; do bash -n "$file"; done < <(find scripts initramfs -type f \( -name '*.sh' -o -path 'initramfs/*' \) -print0)
       - name: Verify local Wiki export
         run: python3 scripts/export-wiki.py --repository-url "https://github.com/${{ github.repository }}"
+  companion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, pinned
+        with:
+          persist-credentials: false
+      - name: Pinned Rust compiler and review tools
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - name: Rust format, fixture tests and lints
+        working-directory: companion
+        run: |
+          cargo +1.99.1 fmt --all --check
+          cargo +1.99.1 test --locked
+          cargo +1.99.1 clippy --locked --all-targets -- -D warnings

@@ -4,6 +4,20 @@ Read `README.md`, `docs/status.md` and `docs/installation.md` first. For install
 follow `docs/agent-installation.md` in order. The tested device is **XT1640 /
 athene P2A, 2 GB / 32 GB**. A family name does not establish hardware compatibility.
 
+## Umbrel and Hermes boundary
+
+- Never access, inspect or change the Umbrel host through SSH, a host shell,
+  Docker/Podman control, host files, service managers or host-management tools.
+  Do not attempt a host connection as a diagnostic or installation shortcut.
+- The Moto/client agent handles this repository and the phone only. It does
+  not install, configure or restart software on the Umbrel host or inside Hermes.
+- The owner gives the published repository to Hermes. Hermes itself performs
+  only its own app/runtime/profile setup, following
+  `docs/hermes-server-agent.md`. No host credentials or Docker socket are needed.
+- Preserve Umbrel's app gateway, login, TLS and optional 2FA. If app-local setup
+  cannot solve a requirement, report the exact missing capability; never escape
+  to host administration. Configuring Hermes alone does not authorize phone writes.
+
 ## Scope and device writes
 
 - Follow the user's current request. Repository work and builds do not authorize

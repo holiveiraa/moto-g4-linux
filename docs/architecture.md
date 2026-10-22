@@ -13,6 +13,8 @@ flowchart TD
     D --> V[Supervised tailscaled / persistent identity]
     X --> S[Saved SSH destinations / OpenSSH or Tailscale SSH]
     X --> Q[Microphone / optional Groq dictation]
+    X --> HC[Optional Rust Hermes companion / Tk host]
+    HC --> HG[Authenticated Umbrel / Hermes gateway]
 ```
 
 ## Layers and source locations
@@ -30,6 +32,11 @@ flowchart TD
 | Network | `moto-wifi*.py`, `moto-services.py` | Saved profiles, guarded operations, distinct VPN state |
 | SSH | `moto-hosts.py`, `moto-ssh-*.py` | Private endpoint-bound credentials, argv, host-key checks |
 | Audio/voice | `moto-audio*.py`, `moto-voice*.py`, `moto-quick-voice.py` | Native ALSA; cloud transcription is optional |
+| Optional companion | `companion/`, `moto-hermes*.py`, `moto-capture.py` | Rust protocol/state/face/speech, native form focus, shared capture lease; source preview |
+
+The [companion setup](hermes-setup.md) documents its independent build, private
+login, provider setup and pending device acceptance. It uses the existing
+Hermes APIs without installing a server plugin.
 
 ## Important adaptations
 
@@ -65,8 +72,19 @@ flowchart TD
 | `/root/.config/moto-linux/hosts.json` | SSH destination metadata |
 | `/root/.config/moto-linux/ssh-passwords/` | Optional private endpoint-bound passwords |
 | `/root/.config/moto-linux/groq.json` | Optional owner API key |
+| `/root/.config/moto-linux/hermes.json` | Optional companion endpoint/account/profile settings |
+| `/root/.config/moto-linux/hermes-auth.json` | Optional revocable app session cookie; never clone |
+| `/root/.config/moto-linux/hermes-task.json` | Owned conversation ID and uncertain-task marker; no prompt text |
 | `/var/lib/moto-audio-volume.json` | Volume preference |
 | `/root/.config/moto-linux/ux.json` | Brightness, saved theme and keyboard layout preferences |
 
 These paths are personal configuration, not release inputs. Permission-protected
 credential files are not an encrypted vault. See [security](../SECURITY.md).
+
+The optional Hermes view uses an immersive native Canvas with compact animated
+Rust vector poses. A separate local-only Rust listener owns ALSA/WebRTC VAD and
+a pinned whisper.cpp helper; the main worker alone handles Groq/Hermes/Edge.
+Standby audio never produces an upload event. Active voice pauses during
+network work/playback and resumes automatically after the acoustic tail.
+Epoch checks discard abandoned-screen transcription callbacks. See
+[design and limits](hermes-assistant.md) before treating local wake as accepted.

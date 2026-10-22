@@ -27,6 +27,21 @@ Depois: Wi-Fi pelo painel, cadastro Tailscale por QR e favoritos SSH com senha
 opcional. O microfone transcreve com sua chave Groq e insere na aba sem Enter.
 [Guia de uso](docs/user-guide.md).
 
+## App Hermes opcional
+
+A nova prévia abre um bichinho em tela cheia: rosto animado, ativação local por
+“Olá Hermes”, conversa por voz sem apertar botão e retorno ao terminal ao fechar.
+“Nova conversa” inicia um contexto novo no mesmo perfil. Usa Rust, Groq para
+transcrever as falas após ativação e Edge no próprio Hermes para responder.
+O login aceita senha Umbrel sem 2FA ou pede código quando a conta exige.
+
+A tela e o fluxo passam por testes isolados; o wake word ainda precisa de
+aceitação física de precisão, velocidade e aquecimento no Moto. O painel antigo foi substituído no Moto de referência; falta configurar a
+conexão e validar a conversa real. Veja [setup e limites](docs/hermes-setup.md)
+e [pesquisa](docs/hermes-assistant.md). O próprio Hermes prepara a parte do
+servidor com [estas instruções](docs/hermes-server-agent.md), dentro de seu app.
+Nunca acesse ou administre o host do Umbrel para essa integração.
+
 ## Explore
 
 [Documentação](docs/README.md) · [Instalação](docs/installation.md) ·
