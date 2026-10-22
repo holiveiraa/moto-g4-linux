@@ -1,5 +1,6 @@
 {
   "Home": "docs/README.md",
+  "Portugues": "README.pt-BR.md",
   "Agent-Installation": "docs/agent-installation.md",
   "Installation": "docs/installation.md",
   "Hardware-Status": "docs/status.md",
@@ -10,5 +11,8 @@
   "Testing": "tests/README.md",
   "Credits": "CREDITS.md",
   "Licenses": "LICENSES/README.md",
-  "Releases": "docs/releasing.md"
+  "Releases": "docs/releasing.md",
+  "Contributing": "CONTRIBUTING.md",
+  "Security": "SECURITY.md",
+  "Wiki-Maintenance": "docs/wiki.md"
 }

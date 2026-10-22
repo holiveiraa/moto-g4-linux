@@ -9,6 +9,7 @@
   <a href="docs/agent-installation.md">Install with your agent</a> ·
   <a href="docs/status.md">Hardware status</a> ·
   <a href="docs/README.md">Documentation</a> ·
+  <a href="https://github.com/holiveiraa/moto-g4-linux/wiki">Wiki</a> ·
   <a href="CREDITS.md">Credits</a> ·
   <a href="README.pt-BR.md">Português</a>
 </p>

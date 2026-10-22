@@ -48,7 +48,9 @@ panel, touch, amplifier, memory layout or partition geometry.
 - lk2nd compiled from a new checkout of the pinned upstream source with the
   Motorola adaptation. That new artifact was not flashed or boot-certified.
 - Shell syntax, public-source privacy/link checks and the 14-file local Wiki
-  export passed. GitHub-hosted CI has not run because nothing was published.
+  export passed. At that local checkpoint GitHub-hosted CI had not run yet.
+  The source repository is now public; current hosted results are available in
+  [GitHub Actions](https://github.com/holiveiraa/moto-g4-linux/actions).
 
 These are source/integration checks. They do not establish a clean rootfs install
 on a second phone, long-term reliability or compatibility with other variants.

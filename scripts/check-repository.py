@@ -30,6 +30,13 @@ def candidates():
 
 def check():
     errors=[];files=candidates()
+    try:
+        wiki_pages=json.loads((ROOT/'wiki/pages.json').read_text(encoding='utf-8'))
+    except (OSError,ValueError):
+        wiki_pages={}
+        errors.append('Cannot validate Wiki navigation: page map missing or invalid')
+    wiki_templates={'{{REPOSITORY_URL}}','{{REPOSITORY_URL}}/wiki'}
+    wiki_templates.update('{{REPOSITORY_URL}}/wiki/'+page for page in wiki_pages)
     for name in files:
         path=ROOT/name
         if not path.is_file():continue
@@ -61,7 +68,7 @@ def check():
             links+=re.findall(r'<img[^>]+src="([^"]+)"',prose)
             for link in links:
                 link=link.strip('<>')
-                if name in ('wiki/_Sidebar.md','wiki/_Footer.md') and link=='{{REPOSITORY_URL}}':continue
+                if name in ('wiki/_Sidebar.md','wiki/_Footer.md') and link in wiki_templates:continue
                 if urlsplit(link).scheme or link.startswith('#'):continue
                 target=(path.parent/unquote(link.split('#')[0])).resolve()
                 if not target.is_relative_to(ROOT) or not target.exists():

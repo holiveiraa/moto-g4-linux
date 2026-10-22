@@ -32,7 +32,7 @@ opcional. O microfone transcreve com sua chave Groq e insere na aba sem Enter.
 [Documentação](docs/README.md) · [Instalação](docs/installation.md) ·
 [Build](docs/building.md) · [Arquitetura](docs/architecture.md) ·
 [Diagnóstico](docs/troubleshooting.md) · [Contribuir](CONTRIBUTING.md) ·
-[Créditos](CREDITS.md) · [Wiki](docs/wiki.md).
+[Créditos](CREDITS.md) · [Wiki](https://github.com/holiveiraa/moto-g4-linux/wiki).
 
 Código próprio, documentação e arte: MIT, com exceções de kernel/lk2nd em
 [LICENSES/README.md](LICENSES/README.md). Firmware, chaves e dados particulares

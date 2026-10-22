@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 import importlib.util
 from pathlib import Path
+import re
 import tempfile
 import unittest
 
@@ -16,7 +17,14 @@ class Wiki(unittest.TestCase):
             self.assertGreater(count,10)
             home=(Path(temp)/'Home.md').read_text()
             self.assertIn('https://github.com/example/moto-g4-linux/wiki/Agent-Installation',home)
+            self.assertIn('https://raw.githubusercontent.com/example/moto-g4-linux/main/docs/assets/banner.svg',home)
+            self.assertIn('https://github.com/example/moto-g4-linux/wiki/Portugues',home)
             self.assertTrue((Path(temp)/'_Sidebar.md').exists())
+            for page in Path(temp).glob('*.md'):
+                content=page.read_text()
+                self.assertNotIn('{{REPOSITORY_URL}}',content)
+                for target in re.findall(r'https://github\.com/example/moto-g4-linux/wiki/([A-Za-z0-9-]+)',content):
+                    self.assertTrue((Path(temp)/(target+'.md')).exists(),(page.name,target))
     def test_noncanonical_repository_is_rejected_without_output(self):
         with tempfile.TemporaryDirectory() as temp:
             output=Path(temp)/'no-output'
