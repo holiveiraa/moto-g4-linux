@@ -8,22 +8,24 @@ The main screen has a face and short state captions, with a discreet options
 menu. Rust owns hearing/network/speech/animation; Tk hosts the native canvas and
 setup/password fields.
 
-**Status: experimental app installed on the reference Moto.** All **28 Rust
-fixtures**, **14 companion Python regressions** and the fullscreen Tk/XTest/tmux
-review passed directly on that Moto, in addition to host checks. The seven-file
-userspace update was installed transactionally, then independently checked by
-hash/size/mode; model startup passed and tmux `@0` survived the GUI restart.
+**Status: experimental app installed on the reference Moto.** All **37 Rust
+fixtures**, **15 companion Python regressions** and the fullscreen Tk/XTest/tmux
+review passed directly on that Moto, in addition to host checks. The latest
+three-file compatibility update was installed transactionally and independently
+checked by hash/size/mode. Runtime smoke passed, personal configuration was
+preserved and tmux `@0` survived the GUI restart. A credential-free probe through
+the Moto's existing Tailscale reached Umbrel's real app-login boundary over HTTP.
 Synthetic local recognition took 1.326–1.906 seconds per sample, with roughly
 78 MB resident memory. Actual-owner wake accuracy, heat/battery, server login
-and live Groq/Edge remain open gates. This phone still needs its first connection
-setup. See [status](status.md) and [research/design](hermes-assistant.md).
+and live Groq/Edge remain open gates. Owner login on the phone is still required.
+See [status](status.md) and [research/design](hermes-assistant.md).
 There is no universal installer.
 
 **23 October compatibility correction:** the current source fixes the canonical
 Hermes `/api/ws` session contract and adds verified HTTP-over-Tailscale support.
-It passes **37 host Rust tests** and **116 Python regressions**. The older
-reference installation described above needs this userspace update before an
-HTTP Tailscale URL works; current-build native/live acceptance is pending.
+It passes **37 host Rust tests** and **116 Python regressions**. The reference
+Moto has this update. Other older installations need matching userspace files
+before an HTTP Tailscale URL works; a complete live voice turn remains pending.
 
 ![Fullscreen companion rendered with synthetic services](assets/hermes.png)
 

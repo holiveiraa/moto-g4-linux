@@ -213,9 +213,19 @@ in place. See [connection setup](hermes-setup.md#http-over-your-existing-tailsca
   stopped VPN, unknown peer, down interface and a still-reachable destination
   after the trusted interface disappears. This does not measure an established
   WebSocket across a physical VPN outage or prove the old Moto kernel's behavior.
-- These latest corrections still require installation/native acceptance on the
-  reference Moto. Its USB maintenance link currently times out. The previous
-  installed revision's native fixture results above do not validate this build.
+- The USB SSH link later became reachable without a PnP restart. A fresh backup
+  was verified, then **three userspace files** were installed transactionally:
+  the Rust core and two Python host modules. Independent hash/size/mode checks
+  passed; native runtime smoke and the GUI restart passed, personal configuration
+  was unchanged and tmux `@0` remained present. This does not establish a USB fix.
+- **All 37 Rust tests**, **15 companion Python tests** and the fullscreen
+  Tk/XTest review then passed **directly on the Moto**, using isolated local
+  services, a separate Xvfb/tmux environment and fresh synthetic TLS credentials.
+  The fixture core is byte-identical to the installed clean-source artifact.
+- A fresh temporary configuration on the Moto reached the real existing Umbrel
+  application over the numeric Tailscale IP using HTTP and returned the expected
+  login-required state. No owner credentials were supplied; this verifies the
+  native LocalAPI/interface-bound discovery path, not authenticated chat/audio.
   The owner reports Edge TTS is already prepared in Hermes; this client agent
   did not install or change anything on that server.
 - Complete owner login and an audible Groq → Hermes → Edge turn remain pending.
