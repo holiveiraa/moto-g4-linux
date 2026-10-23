@@ -7,7 +7,7 @@ use reqwest::{
 };
 use serde_json::{json, Value};
 use std::{
-    io::{Read, Write},
+    io::Read,
     net::TcpStream,
     path::{Path, PathBuf},
     sync::{
@@ -223,6 +223,16 @@ impl Backend {
         Ok(())
     }
     pub fn socket(&self, route: &str, token: &str) -> Result<Socket> {
+        self.socket_bounded(route, token, protocol::MAX_FRAME)
+    }
+    pub fn speech_socket(&self, token: &str) -> Result<Socket> {
+        self.socket_bounded(
+            "/api/audio/speak-stream",
+            token,
+            protocol::SPEECH_MESSAGE_MEMORY_BYTES,
+        )
+    }
+    fn socket_bounded(&self, route: &str, token: &str, maximum: usize) -> Result<Socket> {
         let origin = self.config.url();
         let private_ip = tailnet::verify(&origin)?;
         let mut url = self.config.route(route);
@@ -273,8 +283,8 @@ impl Backend {
             .set_write_timeout(Some(Duration::from_secs(5)))
             .map_err(|_| NETWORK)?;
         let cfg = tungstenite::protocol::WebSocketConfig::default()
-            .max_message_size(Some(protocol::MAX_FRAME))
-            .max_frame_size(Some(protocol::MAX_FRAME));
+            .max_message_size(Some(maximum))
+            .max_frame_size(Some(maximum));
         let (mut ws, _) = tungstenite::client_tls_with_config(
             request,
             stream,
@@ -544,125 +554,5 @@ pub fn speech(
     stop: &AtomicU8,
     alive: &AtomicBool,
 ) -> Result<()> {
-    use std::{
-        os::unix::{io::AsRawFd, process::CommandExt},
-        process::{Command, Stdio},
-    };
-    backend.require_edge(token)?;
-    if !alive.load(Ordering::SeqCst) || stop.load(Ordering::SeqCst) != 0 {
-        return Ok(());
-    }
-    let mut ws = backend.socket("/api/audio/speak-stream", token)?;
-    send(&mut ws, json!({"text":text,"done":true}))?;
-    let mut player: Option<std::process::Child> = None;
-    let mut received = 0usize;
-    let deadline = Instant::now() + Duration::from_secs(180);
-    let mut result = (|| {
-        while Instant::now() < deadline
-            && alive.load(Ordering::SeqCst)
-            && stop.load(Ordering::SeqCst) == 0
-        {
-            match receive(&mut ws)? {
-                Some(Message::Text(data)) => {
-                    let value: Value = serde_json::from_str(&data)
-                        .map_err(|_| Error("Metadados de voz inválidos."))?;
-                    match value["type"].as_str() {
-                        Some("start") if player.is_none() => {
-                            let rate = protocol::pcm_start(&value)?;
-                            let mut cmd = Command::new("aplay");
-                            cmd.args(["-q", "-D", "default", "-t", "raw", "-f", "S16_LE", "-c", "1", "-r", &rate.to_string()]).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
-                            // No orphan speaker if the application process is killed.
-                            unsafe {
-                                cmd.pre_exec(|| {
-                                    if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
-                                        return Err(std::io::Error::last_os_error());
-                                    }
-                                    if libc::getppid() == 1 {
-                                        return Err(std::io::Error::other("parent exited"));
-                                    }
-                                    Ok(())
-                                });
-                            }
-                            player = Some(cmd.spawn().map_err(|_| Error("Reprodução indisponível: instale alsa-utils."))?);
-                            let fd = player.as_ref().and_then(|child| child.stdin.as_ref()).ok_or(Error("Saída de áudio indisponível."))?.as_raw_fd();
-                            unsafe { let flags = libc::fcntl(fd, libc::F_GETFL); if flags < 0 || libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) < 0 { return Err(Error("Não foi possível limitar a reprodução.")); } }
-                        }
-                        Some("end") => return if received > 0 { Ok(()) } else { Err(Error("O provedor não produziu áudio.")) },
-                        _ => return Err(Error("Voz indisponível; a resposta continua em texto. Confira o provedor Edge no Hermes.")),
-                    }
-                }
-                Some(Message::Binary(data)) => {
-                    protocol::validate_pcm(&data)?;
-                    received += data.len();
-                    if received > 24 * 1024 * 1024 {
-                        return Err(Error("Resposta de áudio longa demais."));
-                    }
-                    let output = player
-                        .as_mut()
-                        .and_then(|p| p.stdin.as_mut())
-                        .ok_or(Error("Áudio chegou sem formato."))?;
-                    let mut left = data.as_ref();
-                    while !left.is_empty() {
-                        if !alive.load(Ordering::SeqCst) || stop.load(Ordering::SeqCst) != 0 {
-                            return Ok(());
-                        }
-                        if Instant::now() >= deadline {
-                            return Err(Error("Tempo de voz esgotado."));
-                        }
-                        match output.write(left) {
-                            Ok(0) => return Err(Error("Reprodução encerrada.")),
-                            Ok(n) => left = &left[n..],
-                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                                std::thread::sleep(Duration::from_millis(10))
-                            }
-                            Err(_) => return Err(Error("Não foi possível tocar o áudio.")),
-                        }
-                    }
-                }
-                _ => (),
-            }
-        }
-        if stop.load(Ordering::SeqCst) == 0 && alive.load(Ordering::SeqCst) {
-            Err(Error("Tempo de voz esgotado."))
-        } else {
-            Ok(())
-        }
-    })();
-    let _ = send(&mut ws, json!({"stop":true}));
-    if let Some(mut child) = player {
-        drop(child.stdin.take());
-        let drain = Instant::now() + Duration::from_secs(3);
-        let mut exited = false;
-        while result.is_ok()
-            && stop.load(Ordering::SeqCst) == 0
-            && alive.load(Ordering::SeqCst)
-            && Instant::now() < drain
-        {
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    exited = true;
-                    if !status.success() {
-                        result = Err(Error("O reprodutor de áudio falhou. Confira a saída ALSA."));
-                    }
-                    break;
-                }
-                Ok(None) => (),
-                Err(_) => {
-                    result = Err(Error("Não foi possível confirmar a reprodução."));
-                    break;
-                }
-            }
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        if result.is_ok()
-            && !exited
-            && alive.load(Ordering::SeqCst)
-            && stop.load(Ordering::SeqCst) == 0
-        {
-            result = Err(Error("A saída de áudio não concluiu a reprodução."));
-        }
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-    result
+    crate::speech::run(backend, token, text, stop, alive)
 }

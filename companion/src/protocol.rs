@@ -80,15 +80,62 @@ pub fn rpc_diagnostic(method: &str, canonical: Option<bool>, error: &Value) -> V
 pub fn pcm_start(value: &Value) -> Result<u32> {
     let rate = value["sample_rate"].as_u64().unwrap_or(0);
     if value["type"] != "start" || !(8000..=48000).contains(&rate) || value["channels"] != 1 {
-        return Err(Error("Formato PCM do servidor incompatível."));
+        return Err(Error("VOICE_FORMAT: Formato PCM do servidor incompatível."));
     }
     Ok(rate as u32)
 }
+// Memory guard per assembled message and short synthesis segment, NOT a turn
+// duration limit. Reception and playback are concurrent; a segment's bounded
+// queue plus parser payload can temporarily hold roughly two copies. Successive
+// text segments reuse that budget rather than accumulating a whole answer.
+pub const SPEECH_MESSAGE_MEMORY_BYTES: usize = 32 * 1024 * 1024;
+pub const SPEECH_CONTROL_BYTES: usize = 16384;
+pub const SPEECH_PROGRESS_SECONDS: u64 = 60;
 pub fn validate_pcm(data: &[u8]) -> Result<()> {
-    if data.is_empty() || !data.len().is_multiple_of(2) || data.len() > 262144 {
-        return Err(Error("Bloco de áudio inválido."));
+    if data.is_empty() || !data.len().is_multiple_of(2) {
+        return Err(Error(
+            "VOICE_PCM_ALIGNMENT: Bloco PCM vazio ou amostra incompleta.",
+        ));
+    }
+    if data.len() > SPEECH_MESSAGE_MEMORY_BYTES {
+        return Err(Error("VOICE_MESSAGE_MEMORY: Uma mensagem de voz excedeu o orçamento de memória de 32 MiB; a resposta continua em texto."));
     }
     Ok(())
+}
+
+#[derive(Default)]
+pub struct SpeechMetrics {
+    pub rate: Option<u32>,
+    pub bytes: u64,
+    pub chunks: u64,
+    pub largest_chunk: usize,
+}
+impl SpeechMetrics {
+    pub fn start(&mut self, value: &Value) -> Result<u32> {
+        if self.rate.is_some() {
+            return Err(Error(
+                "VOICE_PROTOCOL: O servidor repetiu o início do áudio.",
+            ));
+        }
+        let rate = pcm_start(value)?;
+        self.rate = Some(rate);
+        Ok(rate)
+    }
+    pub fn accept(&mut self, data: &[u8]) -> Result<()> {
+        self.rate
+            .ok_or(Error("VOICE_PROTOCOL: Áudio chegou sem formato."))?;
+        self.largest_chunk = self.largest_chunk.max(data.len());
+        validate_pcm(data)?;
+        self.bytes = self.bytes.saturating_add(data.len() as u64);
+        self.chunks = self.chunks.saturating_add(1);
+        Ok(())
+    }
+    pub fn finish(&self) -> Result<()> {
+        if self.bytes == 0 {
+            return Err(Error("VOICE_EMPTY: O provedor não produziu áudio."));
+        }
+        Ok(())
+    }
 }
 pub struct Reply {
     session: String,

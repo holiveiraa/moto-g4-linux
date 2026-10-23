@@ -52,11 +52,12 @@ interface previews, not evidence of a live agent conversation. See
 - **Back to Linux whenever you want:** closing releases capture/playback and
   restores the terminal; GUI restarts preserve tmux sessions.
 
-**Experimental:** the app is installed on the reference Moto and passes host
-and native fixtures. Real-owner wake accuracy, heat/battery and the complete
-Groq → Hermes → Edge conversation still need physical acceptance. Local wake
+**Experimental:** the app is installed on the reference Moto. The complete
+Groq → Hermes → Edge chain passes there with synthetic microphone/speaker input
+and real services. Owner-voice wake accuracy, physical conversation and
+heat/battery still need acceptance. Local wake
 does not make conversation offline: transcription and synthesis need internet.
-[Evidence and limits](docs/status.md#fullscreen-hermes-voice-pet-revision--installed-live-voice-pending).
+[Evidence and limits](docs/status.md#hermes-voice-recovery-and-live-service-chain--installed).
 
 ## Connect your Hermes: two sides, one setup
 
@@ -138,7 +139,7 @@ silently format a connected phone. [Installation and recovery](docs/installation
 | Saved Wi-Fi / Tailscale / SSH | Physical Wi-Fi and Tailscale SSH use | QR login needs a browser on another device |
 | Speaker / microphone / volume / dictation | Physical use after an unplugged power cycle | Headset/BT/calls not established |
 | Optional SSH password / host checks | Real phone OpenSSH against an isolated fixture | Private files, not encrypted storage |
-| Hermes face / local activation / voice flow | Installed; native Rust/Tk and synthetic audio/protocol reviews | Real wake/noise, heat/battery and live conversation pending |
+| Hermes face / local activation / voice flow | Installed; native fixtures and real-service chain with synthetic audio pass | Owner wake/noise, physical conversation and heat/battery pending |
 | Fresh install on another unit | Agent workflow documented | Independent reproduction still needed |
 
 The [full matrix](docs/status.md) separates physical tests from simulations. The

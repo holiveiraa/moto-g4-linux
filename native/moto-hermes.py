@@ -70,7 +70,11 @@ def save_config(value, path=None):
     if any(not isinstance(value[key], str) or len(value[key]) > 128
            or any(ord(c) < 32 for c in value[key]) for key in ('user_id','profile')) or not value['user_id']:
         raise ValueError('Conta ou perfil inválido.')
-    target = Path(path or CONFIG)
+    save_private_json(value, Path(path or CONFIG))
+
+
+def save_private_json(value, target):
+    target = Path(target)
     if any(part.is_symlink() for part in (target, *target.parents)):
         raise ValueError('A configuração privada não aceita links simbólicos.')
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -84,6 +88,18 @@ def save_config(value, path=None):
         os.replace(temporary, target)
     finally:
         Path(temporary).unlink(missing_ok=True)
+
+
+def save_voice_diagnostic(value):
+    """Keep only the latest local decision; no transcript, audio or endpoint."""
+    def probability(key):
+        v = value.get(key)
+        return v if type(v) in (float, int) and 0 <= v <= 1 else None
+    duration = value.get('milliseconds')
+    safe = {key:value.get(key) is True for key in ('accepted', 'phrase_match')}
+    safe.update({key:probability(key) for key in ('probability', 'no_speech')})
+    safe['milliseconds'] = duration if type(duration) is int and 0 <= duration <= 25000 else None
+    save_private_json(safe, CONFIG.with_name('hermes-voice-diagnostic.json'))
 
 
 class Worker:

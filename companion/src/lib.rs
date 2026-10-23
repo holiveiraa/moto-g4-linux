@@ -6,6 +6,7 @@ pub mod hearing;
 pub mod listener;
 pub mod net;
 pub mod protocol;
+pub mod speech;
 pub mod state;
 pub mod storage;
 pub mod tailnet;

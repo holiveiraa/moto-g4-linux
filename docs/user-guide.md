@@ -80,6 +80,28 @@ Open a destination in a new terminal tab. Use **+ New**, tap a tab to switch and
 **× → Close this tab** to close. Removing a favorite does not close a session.
 Restarting the GUI keeps tmux sessions; shutting down the phone ends processes.
 
+## Optional maintenance SSH into the Moto over Tailscale
+
+VPN enrollment and permission to log into the phone are separate. To enable
+incoming maintenance access, the owner runs this in the Moto's local terminal:
+
+```sh
+tailscale set --ssh
+```
+
+From a trusted PC already in that tailnet, use `tailscale ssh root@<Moto-name>`
+with the phone's own MagicDNS name. The wrapper verifies the server host key
+advertised through Tailscale. Follow any identity-check URL required by the
+existing tailnet SSH policy. Do not replace that policy to bypass a refusal.
+This uses the existing local root account and the tailnet's device/user identity;
+no shared password or copied private maintenance key is needed.
+
+Tailscale SSH handles port 22 only for incoming tailnet traffic. The separate
+USB Dropbear rescue service keeps its binding and keys; LAN SSH is not opened.
+Enrollment alone does not enable this feature, and fresh installs keep it opt-in.
+To revoke it locally, run `tailscale set --ssh=false`. See the official
+[Tailscale SSH documentation](https://tailscale.com/docs/features/tailscale-ssh).
+
 ## Keyboard and forms
 
 Esc, Tab, Ctrl, Alt, Shift and arrows have dedicated keys. Tap a modifier, then

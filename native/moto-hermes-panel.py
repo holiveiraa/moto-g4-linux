@@ -23,6 +23,7 @@ class HermesPanel:
         self.epoch = self.voice_epoch = self.frame = 0
         self.state = 'disconnected'
         self.last_reply = self.last_user = self.notice = self.login_password = ''
+        self.voice_warning = ''
         self.pending = self.connected = self.transcribing = self.speech_active = False
         self.forgetting = self.switching = self.awake = self.face_pending = False
         self.timer = self.rearm_timer = self.scene = None
@@ -127,6 +128,7 @@ class HermesPanel:
         self.rearm_timer = self.p.s.root.after(400, resume)
 
     def say(self, text):
+        self.voice_warning = ''
         self.pause_listening()
         self.set_status(text if len(text) < 70 else 'Estou falando…', 'speaking')
         self.speech_active = self.command({'cmd':'speak', 'text':text})
@@ -146,18 +148,24 @@ class HermesPanel:
             self.awake = True
             self.say('Olá! Estou ouvindo.')
         elif event == 'utterance' and self.awake and not (self.pending or self.speech_active or self.transcribing):
+            self.voice_warning = ''
             self.pause_listening()
             self.transcribing = True
             self.set_status('Estou ouvindo sua mensagem…', 'transcribing')
             if not self.command({'cmd':'transcribe', 'epoch':self.epoch, 'path':value['path']}): self.transcribing = False
         elif event == 'voice_listening':
-            self.set_status('Pode falar' if self.awake else 'Diga “Olá Hermes”', 'listening' if self.awake else 'standby')
+            if self.voice_warning: self.set_status(self.voice_warning, 'error')
+            else: self.set_status('Pode falar' if self.awake else 'Diga “Olá Hermes”', 'listening' if self.awake else 'standby')
         elif event == 'wake_checking': self.set_status('…', 'standby')
+        elif event == 'wake_checked':
+            try: backend.save_voice_diagnostic(value.get('decision') or {})
+            except (OSError, ValueError): pass
         elif event == 'voice_error': self.set_status(value.get('text', 'Microfone indisponível.'), 'error')
 
     def sleep(self):
         self.stop_local()
         self.awake = False
+        self.voice_warning = ''
         if not self.fullscreen(): self.home()
         else: self.listen()
 
@@ -213,6 +221,7 @@ class HermesPanel:
                 else: self.resume_after_voice()
         elif event in ('spoken', 'speech_error'):
             self.speech_active = False
+            self.voice_warning = value.get('text', 'Falha na voz. Veja a conversa em ···') if event == 'speech_error' else ''
             self.set_status(value.get('text', 'Pode falar'), 'ready' if event == 'spoken' else 'error')
             self.resume_after_voice()
         elif event == 'status': self.set_status(value.get('text', ''), value.get('state', 'thinking'))
@@ -275,6 +284,7 @@ class HermesPanel:
     def close(self, after_stop=None):
         self.stop_local()
         self.login_password = ''
+        self.voice_warning = ''
         self.connected = self.speech_active = self.switching = self.awake = False
         if self.timer is not None:
             self.p.s.root.after_cancel(self.timer)

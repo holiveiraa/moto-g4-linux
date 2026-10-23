@@ -378,6 +378,8 @@ fn capture_turn(
                 if !current(control, desired) {
                     return Ok(());
                 }
+                emit(json!({"event":"wake_checked","voice_epoch":desired.epoch,
+                    "decision":hearing::wake_diagnostic(&result)}));
                 if hearing::valid_wake(&result) {
                     {
                         let mut c = control.lock().map_err(|_| LOCAL)?;
@@ -392,6 +394,9 @@ fn capture_turn(
                     emit(json!({"event":"wake","voice_epoch":desired.epoch}));
                     return Ok(());
                 }
+                // A rejected candidate ends checking, not the listening turn.
+                // Restore standby even if no further speech is detected.
+                emit(json!({"event":"voice_listening","voice_epoch":desired.epoch,"mode":"wake"}));
             } else {
                 thread::sleep(Duration::from_millis(10));
             }

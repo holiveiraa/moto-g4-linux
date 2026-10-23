@@ -179,6 +179,24 @@ class CompanionFiles(unittest.TestCase):
         self.assertTrue(app.transcribing)
         self.assertEqual(app.worker.send.call_args.args[0], {'cmd':'transcribe','epoch':app.epoch,'path':'/fixture/current.wav'})
 
+    def test_rejected_wake_restores_standby_and_diagnostic_is_private_without_text(self):
+        app = self.app()
+        with tempfile.TemporaryDirectory() as folder, patch.object(self.h.backend, 'CONFIG', Path(folder)/'hermes.json'):
+            app.voice_event({'event':'wake_checking','voice_epoch':0})
+            self.assertEqual(app.notice, '…')
+            app.voice_event({'event':'wake_checked','voice_epoch':0,'decision':{
+                'accepted':False,'phrase_match':True,'probability':.3,'no_speech':.01,
+                'milliseconds':1800,'text':'private ambient words','audio':'private audio'}})
+            app.voice_event({'event':'voice_listening','voice_epoch':0,'mode':'wake'})
+            self.assertEqual(app.notice, 'Diga “Olá Hermes”')
+            app.worker.send.assert_not_called()
+            path = Path(folder)/'hermes-voice-diagnostic.json'
+            self.assertEqual(json.loads(path.read_text()), {'accepted':False,'phrase_match':True,
+                'probability':.3,'no_speech':.01,'milliseconds':1800})
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            app.voice_event({'event':'wake_checked','voice_epoch':1,'decision':{'accepted':True}})
+            self.assertFalse(json.loads(path.read_text())['accepted'])
+
     def test_transcription_from_an_abandoned_screen_cannot_become_a_new_prompt(self):
         app = self.app()
         app.transcribing = app.awake = True
@@ -187,6 +205,18 @@ class CompanionFiles(unittest.TestCase):
         self.assertTrue(app.transcribing)
         app.worker.send.assert_not_called()
         app.event({'event':'error','operation':'transcribe','epoch':3,'text':'stale'})
+        self.assertTrue(app.transcribing)
+
+    def test_speech_failure_remains_visible_while_rearmed_until_the_next_utterance(self):
+        app = self.app(); app.awake = app.speech_active = True
+        error = 'VOICE_CONNECTION: Falha na conexão de voz com o Hermes.'
+        app.event({'event':'speech_error','text':error})
+        self.callbacks.pop()()
+        app.voice_event({'event':'voice_listening','voice_epoch':app.voice_epoch,'mode':'conversation'})
+        self.assertEqual(app.notice, error)
+        self.assertEqual(app.state, 'error')
+        app.voice_event({'event':'utterance','voice_epoch':app.voice_epoch,'path':'/fixture/next.wav'})
+        self.assertEqual(app.voice_warning, '')
         self.assertTrue(app.transcribing)
 
     def test_new_conversation_waits_for_confirmation_and_voice_command_never_reaches_llm(self):

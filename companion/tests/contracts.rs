@@ -171,7 +171,32 @@ fn pcm_metadata_and_chunks_are_bounded_before_playback() {
         assert!(protocol::pcm_start(&value).is_err());
     }
     assert!(protocol::validate_pcm(&[0, 1, 2]).is_err());
-    assert!(protocol::validate_pcm(&vec![0; 262146]).is_err());
+    assert!(protocol::validate_pcm(&vec![0; 343296]).is_ok());
+    assert!(protocol::validate_pcm(&vec![0; protocol::SPEECH_MESSAGE_MEMORY_BYTES]).is_ok());
+    assert!(protocol::validate_pcm(&vec![0; protocol::SPEECH_MESSAGE_MEMORY_BYTES + 2]).is_err());
+}
+
+#[test]
+fn speech_has_no_cumulative_duration_limit_and_batching_does_not_change_counts() {
+    for rate in [8000, 24000, 48000] {
+        let total = rate as usize * 2 * 600; // ten minutes, no real-time wait
+        for batch in [960, 343296, 2_000_000] {
+            let mut speech = protocol::SpeechMetrics::default();
+            assert!(speech.accept(&[0, 0]).is_err());
+            speech
+                .start(&json!({"type":"start","sample_rate":rate,"channels":1}))
+                .unwrap();
+            let mut remaining = total;
+            while remaining > 0 {
+                let n = batch.min(remaining);
+                speech.accept(&vec![0; n]).unwrap();
+                remaining -= n;
+            }
+            assert_eq!(speech.bytes, total as u64);
+            speech.finish().unwrap();
+            speech.accept(&[0, 0]).unwrap();
+        }
+    }
 }
 
 #[test]

@@ -23,13 +23,18 @@ pub fn normalized(text: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
-pub fn valid_wake(result: &Value) -> bool {
+fn wake_threshold(result: &Value) -> Option<f64> {
     // One measured tiny-model phonetic variant, never broad fuzzy matching.
     let phrase = normalized(result["text"].as_str().unwrap_or(""));
-    let threshold = match phrase.as_str() {
-        "ola hermes" | "ola ermes" => 0.40,
-        "ula hermes" => 0.45,
-        _ => return false,
+    match phrase.as_str() {
+        "ola hermes" | "ola ermes" => Some(0.40),
+        "ula hermes" => Some(0.45),
+        _ => None,
+    }
+}
+pub fn valid_wake(result: &Value) -> bool {
+    let Some(threshold) = wake_threshold(result) else {
+        return false;
     };
     result["probability"]
         .as_f64()
@@ -37,6 +42,19 @@ pub fn valid_wake(result: &Value) -> bool {
         && result["no_speech"]
             .as_f64()
             .is_some_and(|p| (0.0..=0.45).contains(&p))
+}
+
+/// One bounded decision, without ambient text or audio. Never forward the
+/// recognizer's object: future helper fields may contain private material.
+pub fn wake_diagnostic(result: &Value) -> Value {
+    let probability = |key: &str| result[key].as_f64().filter(|v| (0.0..=1.0).contains(v));
+    serde_json::json!({
+        "accepted": valid_wake(result),
+        "phrase_match": wake_threshold(result).is_some(),
+        "probability": probability("probability"),
+        "no_speech": probability("no_speech"),
+        "milliseconds": result["milliseconds"].as_u64().filter(|v| *v <= 25000),
+    })
 }
 pub fn action(text: &str) -> Option<&'static str> {
     match normalized(text).as_str() {

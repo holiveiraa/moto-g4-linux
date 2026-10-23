@@ -30,6 +30,7 @@ struct Fixture {
     stop: Arc<AtomicBool>,
     submits: Arc<AtomicUsize>,
     edge: Arc<AtomicBool>,
+    audio_case: Arc<AtomicUsize>,
     creates: Arc<AtomicUsize>,
     fail_create: Arc<AtomicBool>,
     queued: Arc<AtomicUsize>,
@@ -47,6 +48,7 @@ impl Fixture {
         let stop = Arc::new(AtomicBool::new(false));
         let submits = Arc::new(AtomicUsize::new(0));
         let edge = Arc::new(AtomicBool::new(true));
+        let audio_case = Arc::new(AtomicUsize::new(0));
         let creates = Arc::new(AtomicUsize::new(0));
         let fail_create = Arc::new(AtomicBool::new(false));
         let queued = Arc::new(AtomicUsize::new(0));
@@ -55,6 +57,7 @@ impl Fixture {
         fs::create_dir(&root).unwrap();
         let (stopper, count, url) = (stop.clone(), submits.clone(), base.clone());
         let provider = edge.clone();
+        let audio = audio_case.clone();
         let sessions = creates.clone();
         let failing = fail_create.clone();
         let waiting = queued.clone();
@@ -66,6 +69,7 @@ impl Fixture {
                         let url = url.clone();
                         let count = count.clone();
                         let provider = provider.clone();
+                        let audio = audio.clone();
                         let sessions = sessions.clone();
                         let failing = failing.clone();
                         let waiting = waiting.clone();
@@ -81,6 +85,7 @@ impl Fixture {
                                 sessions,
                                 failing,
                                 waiting,
+                                audio,
                             )
                         }));
                     }
@@ -99,6 +104,7 @@ impl Fixture {
             stop,
             submits,
             edge,
+            audio_case,
             creates,
             fail_create,
             queued,
@@ -184,10 +190,13 @@ impl App {
         self.child.stdin.as_mut().unwrap().flush().unwrap();
     }
     fn event(&self, kind: &str) -> Value {
+        self.event_with_timeout(kind, Duration::from_secs(5))
+    }
+    fn event_with_timeout(&self, kind: &str, timeout: Duration) -> Value {
         for _ in 0..30 {
             let value = self
                 .rx
-                .recv_timeout(Duration::from_secs(5))
+                .recv_timeout(timeout)
                 .expect("fixture event deadline");
             if value["event"] == kind {
                 return value;
@@ -232,6 +241,7 @@ fn serve(
     creates: Arc<AtomicUsize>,
     fail_create: Arc<AtomicBool>,
     queued: Arc<AtomicUsize>,
+    audio_case: Arc<AtomicUsize>,
 ) {
     stream
         .set_read_timeout(Some(Duration::from_secs(3)))
@@ -267,7 +277,88 @@ fn serve(
                     .to_string()
                     .into(),
             ));
+            let audio = audio_case.load(Ordering::SeqCst);
+            if audio == 5 {
+                use tungstenite::protocol::frame::{
+                    coding::{Data, OpCode},
+                    Frame,
+                };
+                let _ = ws.send(Message::Frame(Frame::message(
+                    vec![0; 128],
+                    OpCode::Data(Data::Binary),
+                    false,
+                )));
+                audio_case.store(55, Ordering::SeqCst);
+                for _ in 0..250 {
+                    if ws
+                        .send(Message::Frame(Frame::message(
+                            vec![0; 128],
+                            OpCode::Data(Data::Continue),
+                            false,
+                        )))
+                        .is_err()
+                    {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(20));
+                }
+                return;
+            }
+            if audio == 6 {
+                let _ = ws.send(Message::Binary([1, 2, 3, 4].repeat(1024 * 1024).into()));
+                let _ = ws.send(Message::Ping(b"fixture-heartbeat".to_vec().into()));
+                ws.get_mut()
+                    .set_read_timeout(Some(Duration::from_secs(1)))
+                    .unwrap();
+                if matches!(ws.read(),Ok(Message::Pong(data)) if data.as_ref()==b"fixture-heartbeat")
+                {
+                    audio_case.store(66, Ordering::SeqCst);
+                    let _ = ws.send(Message::Text(json!({"type":"end"}).to_string().into()));
+                }
+                return;
+            }
+            if audio == 3 {
+                // Oversize length header only: the client must refuse before
+                // allocating/reading the claimed 32 MiB body.
+                let n = (moto_hermes::protocol::SPEECH_MESSAGE_MEMORY_BYTES + 2) as u64;
+                let mut header = vec![0x82, 127];
+                header.extend(n.to_be_bytes());
+                let _ = ws.get_mut().write_all(&header);
+                let _ = ws.read();
+                return;
+            }
+            if matches!(audio, 1 | 2 | 4) {
+                use tungstenite::protocol::frame::{
+                    coding::{Data, OpCode},
+                    Frame,
+                };
+                let pcm = [1, 2, 3, 4].repeat(1024 * 1024); // 4 MiB per message
+                if audio == 2 {
+                    // Split in the middle of an int16 sample. WebSocket
+                    // fragmentation must be reassembled before PCM validation.
+                    let _ = ws.send(Message::Frame(Frame::message(
+                        pcm[..7].to_vec(),
+                        OpCode::Data(Data::Binary),
+                        false,
+                    )));
+                    let _ = ws.send(Message::Frame(Frame::message(
+                        pcm[7..].to_vec(),
+                        OpCode::Data(Data::Continue),
+                        true,
+                    )));
+                } else {
+                    for _ in 0..if audio == 4 { 8 } else { 1 } {
+                        let _ = ws.send(Message::Binary(pcm.clone().into()));
+                    }
+                }
+                let _ = ws.send(Message::Text(json!({"type":"end"}).to_string().into()));
+                let _ = ws.read();
+                return;
+            }
             let _ = ws.send(Message::Binary([1, 2, 3, 4].repeat(1200).into()));
+            // Match a real relay batch beyond the former arbitrary 256 KiB
+            // ceiling. The whole batch must reach ALSA, without truncation.
+            let _ = ws.send(Message::Binary([5, 6, 7, 8].repeat(85824).into()));
             let _ = ws.send(Message::Text(json!({"type":"end"}).to_string().into()));
             let _ = ws.read();
             return;
@@ -600,9 +691,133 @@ fn binary_chat_ignores_foreign_events_and_plays_only_returned_pcm() {
     app.event("spoken");
     assert_eq!(
         fs::read(fixture.root.join("pcm-received")).unwrap(),
-        [1, 2, 3, 4].repeat(1200)
+        [[1, 2, 3, 4].repeat(1200), [5, 6, 7, 8].repeat(85824)].concat()
     );
     assert_eq!(fixture.submits.load(Ordering::SeqCst), 1);
+}
+
+fn check_speech_batches(case: usize, expected_bytes: usize) {
+    let fixture = Fixture::new(false, false);
+    fixture.audio_case.store(case, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"speak","text":"synthetic speech batching review"}));
+    app.event_with_timeout("spoken", Duration::from_secs(30));
+    let pcm = fs::read(fixture.root.join("pcm-received")).unwrap();
+    assert_eq!(pcm.len(), expected_bytes);
+    assert!(pcm
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .all(|sample| *sample == [1, 2, 3, 4]));
+    let path = fixture.root.join("hermes-speech-diagnostic.json");
+    let stats = storage::load(&path).unwrap();
+    assert_eq!(stats["outcome"], "completed");
+    assert_eq!(stats["bytes"], expected_bytes);
+    assert_eq!(stats["sample_rate"], 24000);
+    assert!(!stats.to_string().contains("synthetic speech"));
+    assert_eq!(
+        fs::metadata(path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+}
+
+#[test]
+fn whole_sentence_above_one_megabyte_plays_without_truncation() {
+    check_speech_batches(1, 4 * 1024 * 1024);
+}
+
+#[test]
+fn websocket_fragments_can_split_pcm_samples_without_changing_playback() {
+    check_speech_batches(2, 4 * 1024 * 1024);
+}
+
+#[test]
+fn long_reply_exceeds_old_total_and_duration_caps_without_accumulating_audio() {
+    check_speech_batches(4, 32 * 1024 * 1024); // >11 min at 24 kHz, fast byte sink
+}
+
+#[test]
+fn excessive_message_length_is_rejected_from_header_with_an_explicit_private_diagnostic() {
+    let fixture = Fixture::new(false, false);
+    fixture.audio_case.store(3, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"speak","text":"synthetic oversize header"}));
+    let error = app.event("speech_error");
+    assert!(error["text"]
+        .as_str()
+        .unwrap()
+        .starts_with("VOICE_MESSAGE_MEMORY:"));
+    let stats = storage::load(&fixture.root.join("hermes-speech-diagnostic.json")).unwrap();
+    assert_eq!(stats["outcome"], "VOICE_MESSAGE_MEMORY");
+    assert_eq!(stats["phase"], "receiving");
+    assert_eq!(stats["bytes"], 0);
+}
+
+#[test]
+fn stopping_an_unfinished_trickling_message_interrupts_the_reader_promptly() {
+    let fixture = Fixture::new(false, false);
+    fixture.audio_case.store(5, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"speak","text":"synthetic fragmented cancellation"}));
+    for _ in 0..300 {
+        if fixture.audio_case.load(Ordering::SeqCst) == 55 {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(fixture.audio_case.load(Ordering::SeqCst), 55);
+    let start = std::time::Instant::now();
+    app.send(json!({"cmd":"stop_speech"}));
+    app.event("spoken");
+    assert!(start.elapsed() < Duration::from_secs(2));
+    let stats = storage::load(&fixture.root.join("hermes-speech-diagnostic.json")).unwrap();
+    assert_eq!(stats["outcome"], "cancelled");
+    assert_eq!(stats["bytes"], 0);
+}
+
+#[test]
+fn paced_playback_does_not_block_websocket_pong() {
+    let fixture = Fixture::new(false, false);
+    fixture.audio_case.store(6, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    fs::write(fixture.root.join("tools/aplay"), "#!/usr/bin/env python3\nimport os,sys,time,pathlib\np=os.environ['MOTO_FIXTURE_AUDIO']\nwith open(p,'wb') as f:\n while b:=sys.stdin.buffer.read(65536):\n  f.write(b);time.sleep(.02)\npathlib.Path(p+'.done').write_text('done')\n").unwrap();
+    app.send(json!({"cmd":"speak","text":"synthetic paced playback and heartbeat"}));
+    for _ in 0..300 {
+        if fixture.audio_case.load(Ordering::SeqCst) == 66 {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(fixture.audio_case.load(Ordering::SeqCst), 66);
+    assert!(!fixture.root.join("pcm-received.done").exists());
+    app.event_with_timeout("spoken", Duration::from_secs(30));
+    assert_eq!(
+        fs::metadata(fixture.root.join("pcm-received"))
+            .unwrap()
+            .len(),
+        4 * 1024 * 1024
+    );
+}
+
+#[test]
+fn long_text_uses_all_pieces_and_one_persistent_player() {
+    let fixture = Fixture::new(false, false);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"speak","text":"word ".repeat(170)}));
+    app.event_with_timeout("spoken", Duration::from_secs(30));
+    let stats = storage::load(&fixture.root.join("hermes-speech-diagnostic.json")).unwrap();
+    assert_eq!(stats["pieces"], 3);
+    assert_eq!(
+        fs::metadata(fixture.root.join("pcm-received"))
+            .unwrap()
+            .len(),
+        (4800 + 343296) * 3
+    );
 }
 
 #[test]

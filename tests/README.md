@@ -40,6 +40,16 @@ fresh synthetic `ca.pem`, `leaf.pem` and `leaf.key` generated for that review,
 with a localhost DNS SAN and short validity. Never supply a production CA/key.
 Record which suites actually ran; a cross-build alone is not a native result.
 
+Speech fixtures include 4 MiB messages, WebSocket fragmentation in the middle
+of an int16 sample and 32 MiB of cumulative PCM at 24 kHz (>11 minutes of media,
+consumed by a fast synthetic sink). They check every output byte and safe
+diagnostics. A header claiming more than the message memory budget is refused
+without sending/reading its payload. These tests establish transport behavior;
+they do not play eleven minutes through the physical speaker.
+Additional fixtures cancel during a continuously trickling unfinished message,
+require a Pong while a paced output is still playing and check that all text
+pieces reach one persistent player.
+
 ## Isolated UI / PTY reviews
 
 `review-*.py` files are **not** in the default runner. They require a native
@@ -75,6 +85,41 @@ account/network events are synthetic while Rust renders the actual face.
 Never use a person's live tmux session for destructive close/typing tests.
 Start/stop only the Xvfb/tmux processes created by the review. Do not overwrite a
 real Groq configuration or Tailscale identity to create a screenshot.
+
+## Opt-in live Hermes voice chain
+
+`review-hermes-live.py` exercises the actual Tk controller, Rust network worker,
+local VAD/recognizer/model and real Groq → Hermes → Edge services in one chain.
+It replaces only ALSA capture/playback with generated speech and a PCM byte
+sink. It verifies a rejected activation returning to standby, accepted activation,
+spoken acknowledgment, one post-wake transcription, one agent turn, spoken
+reply and automatic listening afterward. It does not establish recognition of
+the owner's voice or physical microphone/speaker performance.
+
+Run only with the owner's authorization to use those services. Close the
+production Hermes app, stage reviewed modules and binary together, then start
+a private Xvfb display. The local recognizer/model must already be installed.
+Supply three synthetic mono 16 kHz S16 WAVs: a non-wake phrase, “Olá Hermes”
+and a harmless question. Do not use personal recordings in a published fixture.
+
+```sh
+xvfb-run -a -s '-screen 0 1080x1920x24 -nolisten tcp' \
+  python3 tests/review-hermes-live.py \
+  --live-config /root/.config/moto-linux/hermes.json \
+  --binary /usr/local/bin/moto-hermes \
+  --negative-wav /private/synthetic/negative.wav \
+  --wake-wav /private/synthetic/wake.wav \
+  --question-wav /private/synthetic/question.wav
+```
+
+This is deliberately excluded from offline CI. It uses the existing remembered
+Umbrel cookie and Groq key locally in a temporary private directory, creates a
+separate server conversation and leaves the production journal unchanged. That
+test conversation remains on Hermes for inspection. Credentials, synthetic
+recordings and PCM are not included in its result; temporary local copies are
+removed after the workers stop. The source files are checked unchanged. If the
+cookie needs a fresh login, log in through the normal phone UI first. Do not put
+passwords or keys on this command line or in a report.
 
 `review-wifi-saved-device.py` is explicitly a **live saved-profile persistence
 check**, not an isolated mock: it saves the currently connected profile but

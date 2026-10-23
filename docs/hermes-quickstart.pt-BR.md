@@ -5,9 +5,10 @@ O app transforma o Moto em um companheiro com rosto animado e voz. Ele usa
 terminal. Este roteiro configura a conexão; a instalação do Linux e o build
 do app são etapas anteriores, descritas nos guias vinculados abaixo.
 
-**Estado:** experimental, instalado no Moto XT1640 de referência. Testes
-isolados passaram; a conversa com conta, microfone e serviços reais ainda
-precisa ser validada pelo proprietário. Não há instalador universal.
+**Estado:** experimental, instalado no Moto XT1640 de referência. O fluxo
+completo passou com Groq, Hermes e Edge reais, usando microfone/saída sintéticos
+em uma conversa de teste separada. A sua voz, o microfone/alto-falante físicos
+e a ergonomia ainda precisam de validação. Não há instalador universal.
 
 ## 1. Confira o que você precisa
 

@@ -6,6 +6,24 @@ use moto_hermes::{
 use serde_json::json;
 
 #[test]
+fn wake_diagnostics_exclude_ambient_words_and_bound_metrics() {
+    let result = hearing::wake_diagnostic(&json!({"text":"private ambient words",
+        "probability":0.9,"no_speech":0.01,"milliseconds":1800,"secret":"fixture-secret"}));
+    assert_eq!(
+        result,
+        json!({"accepted":false,"phrase_match":false,
+        "probability":0.9,"no_speech":0.01,"milliseconds":1800})
+    );
+    let invalid = hearing::wake_diagnostic(&json!({"text":"Olá Hermes",
+        "probability":2,"no_speech":-1,"milliseconds":25001}));
+    assert_eq!(
+        invalid,
+        json!({"accepted":false,"phrase_match":true,
+        "probability":null,"no_speech":null,"milliseconds":null})
+    );
+}
+
+#[test]
 fn wake_requires_the_whole_phrase_speech_and_probability() {
     assert!(hearing::valid_wake(
         &json!({"text":" Olá, Hermes!","probability":0.85,"no_speech":0.02})

@@ -25,7 +25,7 @@ panel, touch, amplifier, memory layout or partition geometry.
 | Native microphone | Working | Physical speech recording and transcription |
 | Speaker / volume buttons | Working | Owner-confirmed after unplugged power cycle |
 | Groq dictation / keyboard mic | Working | Real transcription; inserts without Enter |
-| Hermes fullscreen companion | Installed; native fixtures pass | Real wake/noise, heat/battery and complete live conversation still pending |
+| Hermes fullscreen companion | Installed; native fixtures and real-service chain pass with synthetic audio | Owner wake/noise, physical conversation and heat/battery pending |
 
 For the Hermes app, start with the [first connection checklist](hermes-setup.md#first-connection-checklist),
 [Portuguese tutorial](hermes-quickstart.pt-BR.md) and
@@ -276,6 +276,47 @@ titled creation from this client.
   Protected login and session creation now work on the actual legacy entry.
   No session IDs, cookies or endpoint addresses were published. Real prompt/
   response and the complete spoken conversation still need owner acceptance.
+
+## Hermes voice recovery and live-service chain — installed
+
+On 23 October, the owner reported that activation left the face at three dots
+and no message appeared in the new Hermes conversation. A rejected local wake
+candidate had no event restoring standby. The matching Rust/native update now
+restores listening and retains only one private decision's safe metrics. No
+standby audio is sent to Groq and activation thresholds were not loosened.
+
+The linked review then found a separate real speech defect: the relay sent valid
+PCM batches of 320,256 and 343,296 bytes beyond the client's 256 KiB assumption.
+Speech now has separate reception/playback, bounded per-piece memory, explicit
+stage/error diagnostics and no total-duration/total-byte cutoff. The reader
+answers WebSocket Ping during paced playback; cancellation shuts down an
+independent socket handle to interrupt unfinished messages. All response text
+pieces reach a persistent player. Synthesis pauses between pieces remain a
+documented limitation. See [speech policy](hermes-setup.md#speech-transport-and-safe-diagnostics).
+
+- **52 Rust tests**, Rustfmt/Clippy and **119 Python offline regressions** pass.
+  All **52 Rust tests**, **18 companion Python tests** and the isolated
+  fullscreen Tk/XTest/tmux review also passed directly on the Moto. Fixtures
+  cover multi-megabyte PCM, sample-boundary fragmentation, >11 minutes of media
+  consumed by a fast sink, bounded headers, trickling-message cancellation and
+  heartbeat handling during paced playback.
+- The **entire linked real-service chain passed on the Moto**: synthetic
+  non-wake rejection → local synthetic activation → real Edge acknowledgment →
+  post-wake capture → real Groq transcript → isolated real Hermes conversation →
+  real Edge reply → automatic listening. A synthetic PCM sink received 153,216
+  bytes for acknowledgment and 451,584 for the reply; the reply rate was 24 kHz
+  and its largest batch 327,168 bytes. No transcript, reply, credentials,
+  endpoint or conversation identity is published. This does not verify the
+  owner's voice, acoustic conditions or physical speaker path.
+- The userspace update was staged and hash-checked with a fresh private rollback
+  archive, preserving owner settings and tmux `@0`. The core is 3,543,584 bytes,
+  SHA256 `330ef1476687d362ef7c7ec89d00b2dd2d93f663cdd08736c90cf0bba6eac356`.
+- The owner explicitly enabled incoming Tailscale SSH on the Moto and confirmed
+  the existing identity-check challenge. A verified root session worked over
+  the VPN while LAN port 22 refused connections. USB Dropbear was preserved;
+  its earlier connectivity problem remains unresolved. No boot/partition,
+  account enrollment or Umbrel host change was made. Reboot persistence of the
+  incoming SSH change has not been physically retested.
 
 ## Distribution maturity
 

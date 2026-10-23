@@ -8,25 +8,28 @@ The main screen has a face and short state captions, with a discreet options
 menu. Rust owns hearing/network/speech/animation; Tk hosts the native canvas and
 setup/password fields.
 
-**Status: experimental app installed on the reference Moto.** All **42 Rust
-fixtures**, **16 companion Python regressions** and the fullscreen Tk/XTest/tmux
+**Status: experimental app installed on the reference Moto.** All **52 Rust
+fixtures**, **18 companion Python regressions** and the fullscreen Tk/XTest/tmux
 review passed directly on that Moto, in addition to host checks. The userspace
 compatibility updates were installed transactionally and independently
 checked by hash/size/mode. Runtime smoke passed, personal configuration was
 preserved and tmux `@0` survived the GUI restart. A credential-free probe through
 the Moto's existing Tailscale reached Umbrel's real app-login boundary over HTTP.
 Synthetic local recognition took 1.326–1.906 seconds per sample, with roughly
-78 MB resident memory. Actual-owner wake accuracy, heat/battery and live
-Groq/Edge remain open gates. Real Umbrel login and Moto-session creation are
-confirmed on the reference installation.
+78 MB resident memory. The full chain now passes on that Moto using synthetic
+microphone/speaker input and real Groq, Hermes and Edge services, including
+automatic listening afterward. Actual-owner wake accuracy, physical spoken
+conversation and heat/battery remain open gates. Real Umbrel login and
+Moto-session creation are confirmed on the reference installation.
 See [status](status.md) and [research/design](hermes-assistant.md).
 There is no universal installer.
 
 **23 October compatibility correction:** the current source selects the announced
 canonical or legacy Hermes `/api/ws` contract and supports verified HTTP over Tailscale.
-It passes **42 host Rust tests** and **117 Python regressions**. The reference
+It passes **52 host Rust tests** and **119 Python regressions**. The reference
 Moto has this update. Other older installations need matching userspace files
-before an HTTP Tailscale URL works; a complete live voice turn remains pending.
+before an HTTP Tailscale URL works. See the current
+[live-service evidence and physical limits](status.md#hermes-voice-recovery-and-live-service-chain--installed).
 
 ![Fullscreen companion rendered with synthetic services](assets/hermes.png)
 
@@ -379,6 +382,67 @@ acknowledgment does not rerun or undo the operation.
 Do not attach credentials, cookie/task files, recordings or owner diagnostics to
 GitHub issues. Share versions, sanitized error text, target/build hashes and a
 synthetic reproduction instead.
+
+### Local activation stays at three dots
+
+The dots mean the local model is checking a speech candidate. A rejected
+candidate must return to **Diga “Olá Hermes”** while listening continues; it must
+not upload that clip or create a chat message. Older clients left the dots on
+screen after rejection. Update the matching Rust runtime and native host modules.
+
+The private `hermes-voice-diagnostic.json`, next to `hermes.json`, retains only
+the latest decision: accepted/phrase-match booleans, probability/no-speech scores
+and inference milliseconds. It contains no recognized words, audio, address or
+session identity. A phrase match with low confidence differs from a phrase
+mismatch; neither justifies automatically sending standby audio to Groq or
+loosening the activation threshold. Real microphone/voice acceptance is still
+required after the synthetic chain review in [Testing](../tests/README.md).
+
+### Speech transport and safe diagnostics
+
+Speech has **no client cutoff for total duration or total PCM bytes**. The
+client receives PCM/control messages concurrently with ALSA playback. It
+does not retain the whole answer. Text is sent in successive pieces targeting
+400 characters at word boundaries; an unbroken token is kept intact. No text
+is omitted. Each piece gets its own synthesis socket, with one player retained
+across pieces. There can be a synthesis pause at those boundaries; next-piece
+prefetch has not been implemented. The actual mono signed-16 sample rate comes
+from the server's start metadata (supported: 8–48 kHz).
+
+The inspected [Hermes relay implementation](https://github.com/NousResearch/hermes-agent/blob/4d04303818b61bf3aa09278af48356315515965b/hermes_cli/web_routers/audio.py)
+can send a whole sentence's PCM in one message; it promises no 256 KiB or 1 MiB
+packet size. Speech therefore has its own transport policy, separate from chat:
+
+- **32 MiB per assembled message and synthesis piece** is a client memory budget, not a
+  limit on the whole response or a guarantee about future Hermes versions.
+  That payload is 1.56% of the reference phone's 2 GiB RAM. A bounded PCM queue,
+  the parser's current message and other overhead can temporarily use more than
+  that payload budget. A piece exceeding the budget reports `VOICE_SEGMENT_MEMORY`;
+  an oversized message header reports `VOICE_MESSAGE_MEMORY` before its body is read.
+- **60 seconds without a complete audio message or successful playback write**
+  reports `VOICE_IDLE_TIMEOUT`. Keepalive pings do not extend that deadline.
+  Active playback/reception can continue beyond three minutes. Closing/stopping
+  still interrupts it. A separate socket reader answers Ping during paced
+  playback; cancellation shuts down an independent TCP handle to interrupt even
+  an unfinished fragmented message. The final ALSA wait covers the measured pipe capacity at
+  the actual sample rate plus two seconds of scheduling/buffer headroom.
+- PCM alignment, metadata, early disconnect and playback completion have
+  distinct errors. Text remains available, failed speech is not automatically
+  repeated, and its error stays visible when listening resumes.
+
+These are explicit supported-client resource policies. Receiving an arbitrarily
+large single message with constant memory would require a streaming-message
+receiver or bounded framing from the server; increasing a number alone does
+not establish that capability. See the pinned
+[WebSocket library contract](https://docs.rs/tungstenite/0.28.0/tungstenite/protocol/struct.WebSocketConfig.html).
+
+The private `hermes-speech-diagnostic.json`, next to `hermes.json`, records only
+the latest outcome/code, phase, sample rate, accepted PCM bytes, chunk count,
+largest chunk, piece count and active memory/idle policies. It contains no reply text, audio,
+token, cookie, address or session ID. Share only sanitized findings. Regression
+fixtures cover multi-megabyte messages, fragmentation through sample boundaries,
+over-eleven-minute equivalent output with a fast sink, oversized headers,
+unfinished-message cancellation and Ping/Pong during paced playback.
 
 ## Acceptance before calling an installation ready
 
