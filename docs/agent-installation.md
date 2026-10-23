@@ -112,8 +112,13 @@ If the owner wants the optional Hermes face/voice app, follow the separate
 Rust component for this exact target and verify its old-kernel runtime before
 claiming it works. Use this installation's own Hermes/Umbrel account, CA trust
 and Groq key. Password-only and optional 2FA login are supported; no preconfigured
-cookie, conversation ID or API key belongs in a fresh image. The companion is a
-source preview and has not yet passed physical Moto acceptance.
+cookie, conversation ID or API key belongs in a fresh image. The companion is
+installed on the reference Moto with native fixtures passing; actual-owner
+voice acceptance remains open. Include both the Rust core and pinned local
+activation helper/model. Give the owner the
+[Portuguese first-use tutorial](hermes-quickstart.pt-BR.md) and
+[instructions to send Hermes itself](hermes-server-agent.md). The client agent
+must not configure the server or access the Umbrel host.
 
 ## Phase 6 — owner acceptance, unplugged
 

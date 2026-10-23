@@ -3,6 +3,7 @@
 | Class | Tools | Effect |
 | --- | --- | --- |
 | Repository | `check-repository.py`, `run-tests.py`, `export-wiki.py` | Local checks/tests/export; no publishing |
+| Interface previews | `capture-interface.py` | Real Tk/xterm with synthetic data in a disposable Xvfb container; see [gallery](../docs/screenshots.md) |
 | Source builds | `build-kernel.sh`, `build-lk2nd.sh`, `build-boot-image.sh` | Fetch pinned sources and emit private artifacts; no phone writes |
 | Optional Rust app | `build-companion.py` | Checks/exports public sources, runs host Rust tests/lints, builds host or ARM64 musl and emits hashes/licenses; no device writes |
 | Root staging | `assemble-userspace.py`, `rootfs-in-container.sh` | Offline staging; personal state must be empty |

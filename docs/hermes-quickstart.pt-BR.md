@@ -1,0 +1,152 @@
+# Hermes no Moto: do setup à primeira conversa
+
+O app transforma o Moto em um companheiro com rosto animado e voz. Ele usa
+**seu Hermes Agent já existente**, sem criar outro bot e sem substituir o
+terminal. Este roteiro configura a conexão; a instalação do Linux e o build
+do app são etapas anteriores, descritas nos guias vinculados abaixo.
+
+**Estado:** experimental, instalado no Moto XT1640 de referência. Testes
+isolados passaram; a conversa com conta, microfone e serviços reais ainda
+precisa ser validada pelo proprietário. Não há instalador universal.
+
+## 1. Confira o que você precisa
+
+| Onde | Requisito |
+| --- | --- |
+| Moto | Linux deste projeto funcionando, Wi-Fi, microfone/alto-falante e os componentes do app instalados. |
+| Hermes | Sua instância existente, um perfil combinado e APIs compatíveis. O cliente foi desenvolvido para Hermes v0.22.4/Umbrel 2.0. |
+| Transcrição | Sua chave Groq cadastrada privadamente no Moto. Não publique nem envie a chave pelo chat. |
+| Resposta falada | Edge TTS preparado dentro do próprio Hermes, com uma voz pt-BR disponível. |
+| Acesso | URL HTTPS do **app Hermes** que você já usa pelo Wi-Fi/Tailscale, conta Umbrel e senha. 2FA só se habilitado na conta. |
+
+Se está começando com outro telefone, use primeiro o
+[guia de instalação por agente](agent-installation.md). Se a base Linux já
+funciona, peça ao agente do Moto para seguir o
+[build e instalação do app](hermes-setup.md#build-from-public-source), incluindo
+o modelo local de ativação. Não use um rootfs configurado de outra pessoa.
+
+## 2. Envie estas instruções ao próprio Hermes
+
+Você pode enviar a mensagem pela interface que já utiliza, inclusive Telegram:
+
+> Prepare sua parte para meu app do Moto usando
+> https://github.com/holiveiraa/moto-g4-linux. Leia AGENTS.md,
+> docs/hermes-server-agent.md e docs/hermes-setup.md. Trabalhe somente dentro
+> do próprio app/runtime e dos dados do perfil Hermes. Confira sua versão e
+> as APIs de chat/áudio existentes, faça backup da configuração e prepare Edge
+> TTS com uma voz pt-BR, preservando meu Telegram. Nunca acesse nem altere o
+> host do Umbrel, Docker, gateway, autenticação, portas ou serviços. Informe o
+> perfil e a voz escolhidos, os testes feitos e qualquer impedimento dentro
+> desse limite. Não declare concluído o teste de voz no Moto antes de fazê-lo.
+
+O [guia para o Hermes servidor](hermes-server-agent.md) é a instrução técnica
+que ele deve seguir. O trabalho é no próprio ambiente/perfil Hermes: verificar
+as APIs existentes e preparar a síntese de voz. **Não há plugin adicional
+obrigatório** para o contrato já implementado. Se a versão diferir, o Hermes
+deve apontar a incompatibilidade sem abrir porta interna nem remover o login.
+
+Guarde a resposta dele com **versão, nome do perfil e voz**. O mesmo perfil
+precisa atender chat e áudio. Se uma mudança no perfil atual afetar o Telegram,
+combine um perfil separado usando os recursos suportados pelo seu Hermes.
+
+## 3. Configure a chave de transcrição no Moto
+
+Abra **Painel → Voz e áudio → Groq** e cadastre **sua própria chave** nos campos
+privados do telefone. O app usa essa mesma configuração do ditado; não é
+necessário duplicar a chave dentro do Hermes servidor.
+
+O áudio de espera por “Olá Hermes” é processado localmente e descartado.
+Depois da confirmação falada, cada fala da conversa é enviada à Groq para
+transcrição. A fala de resposta usa o serviço online Edge a partir do Hermes.
+
+## 4. Preencha a conexão no app
+
+Abra **Painel → Hermes → ··· → Configurar**. Segurar o rosto também abre as
+opções. A configuração inicial exige toque e teclado; depois do login, a
+conversa normal é por voz.
+
+| Campo/opção | O que preencher |
+| --- | --- |
+| URL do Hermes | A **origem HTTPS do app**: hostname e porta, se houver. Exemplo fictício: `https://server.example:8443`. Não inclua caminho, senha, token ou parâmetros. Não use uma porta interna de container. |
+| Conta Umbrel | O identificador da conta com acesso ao app; `0` é a conta proprietária no contrato inspecionado. |
+| Perfil Hermes | O perfil confirmado pelo próprio Hermes. Deixe o padrão somente se ele confirmou que é esse mesmo. |
+| Origem do login Umbrel | Normalmente vazia: o cliente usa o mesmo hostname na porta 2000 no contrato Umbrel 2.0. Se sua instalação expuser outra origem, use a origem HTTPS exata e verificada. |
+| CA adicional | Vazia se o certificado já for confiável no sistema. Para CA privada, use o caminho de um PEM obtido e conferido independentemente. Não desative validação TLS. |
+| Respostas faladas | Ative para ouvir o Hermes. |
+| Lembrar sessão | Opcional. Guarda um cookie local de acesso do app, não a senha. Esse cookie pode autorizar outros apps permitidos à mesma conta; proteja o aparelho. |
+
+Salve e conecte. O endereço precisa estar acessível **pelo Moto**, com hostname
+compatível com o certificado. Wi-Fi e Tailscale são rotas; não troque de conta
+Tailscale nem altere SSH para configurar o app. Não copie cookies do navegador.
+
+Este cliente exige HTTPS. Se a única entrada existente do app for HTTP,
+informe essa incompatibilidade: o guia não autoriza o Hermes a mudar o gateway,
+abrir uma porta interna ou administrar o host do Umbrel para contorná-la.
+
+### Se você não usa 2FA
+
+Digite **somente sua senha Umbrel** no formulário do telefone. O app completa
+o login e a autorização de entrada do Hermes. Não precisa ativar 2FA.
+
+### Se você usa 2FA
+
+Depois da senha, se o servidor pedir, aparece o campo de código. Digite o
+código atual do seu autenticador. Um código vencido pode ser tentado novamente;
+isso não muda a configuração de segurança da conta.
+
+Senhas e códigos ficam fora dos argumentos do terminal e dos logs. Ao sair do
+fluxo de login, a senha retida em memória é descartada. Os arquivos privados
+do telefone têm permissões restritas; não são um cofre criptografado.
+
+## 5. Faça a primeira conversa
+
+1. Com o rosto conectado, diga **“Olá Hermes”** sozinho.
+2. Espere **“Olá! Estou ouvindo.”**. A frase de ativação inteira é descartada;
+   faça o pedido depois dessa confirmação.
+3. Diga uma pergunta simples, por exemplo: **“Quanto é dois mais dois?”**.
+   Pare de falar; após cerca de 700 ms de silêncio detectado, o app transcreve,
+   consulta o agente e fala a resposta.
+4. Faça outra pergunta quando ele voltar a ouvir. Não é preciso repetir
+   “Olá Hermes” a cada turno.
+5. Diga **“Nova conversa”** como uma fala completa. Isso cria um contexto novo
+   no mesmo perfil. A conversa anterior permanece no servidor.
+6. Diga **“Voltar ao terminal”** para fechar. Abra novamente para conferir que
+   a conversa atual foi mantida e o terminal continua disponível.
+
+| Você diz | Resultado |
+| --- | --- |
+| “Olá Hermes” | Ativa a conversa, a partir da espera local. |
+| “Nova conversa” / “Hermes, nova conversa” | Troca o contexto atual depois da confirmação do servidor. |
+| “Voltar a dormir” | Volta a esperar ativação local. |
+| “Fechar aplicativo” / “Voltar ao terminal” | Fecha o app e encerra seus processos de áudio. |
+
+O app usa uma conversa própria do Moto, diferente do Telegram. Fechar e reabrir
+mantém essa conversa; **Nova conversa** troca o ID, preservando perfil e chats
+antigos. A troca é bloqueada se houver uma tarefa em andamento ou resultado
+incerto. Ela não apaga a memória permanente do perfil nem muda suas ferramentas.
+
+A captura pausa durante transcrição, processamento e resposta falada. Aguarde
+o rosto voltar a ouvir; interrupção por voz durante a reprodução ainda não foi
+validada. Comandos falados após ativação também dependem da transcrição Groq.
+O **×** continua disponível se a rede falhar. Apagar a tela interrompe a escuta;
+isso só apaga a luz de fundo, não suspende nem bloqueia o sistema.
+
+## 6. Se algo não funcionar
+
+| Sintoma | Próximo passo |
+| --- | --- |
+| Falta componente/modelo | Siga o build/instalação completo; o app não envia áudio de espera à nuvem como alternativa. |
+| Erro de certificado | Confira hostname, data/hora, CA e origens do app/login. Preserve a verificação TLS. |
+| Login funciona no navegador, mas o app recusa | Confira conta, URL e contrato da versão Umbrel. Não exporte cookies nem abra porta interna. |
+| Ouve a ativação, mas falha ao transcrever | Confira a chave Groq deste Moto, internet e quota. Grave uma nova fala; não há reenvio automático. |
+| Texto funciona, voz não | Peça ao próprio Hermes para verificar Edge, voz e dependências no perfil combinado. Confira volume/saída nativa no Moto. |
+| Microfone ocupado | Encerre o ditado/gravação anterior. Os dois recursos compartilham a posse da captura. |
+| Resultado da tarefa desconhecido | Confira a conversa no Hermes antes de usar “Já conferi a tarefa”. Reconectar não significa desfazer ações já aceitas. |
+
+Veja [diagnóstico detalhado](hermes-setup.md#disconnects-and-troubleshooting).
+Não publique chave Groq, senha, cookie, gravações nem logs pessoais em issues.
+O USB é a manutenção do aparelho; a conversa normal usa a rede do Moto.
+
+Conclua a aceitação com sua voz e ruído ambiente: ativação, tempo de resposta,
+fala audível, escuta após resposta, novo contexto, saída do app, terminal
+preservado e observação de calor/autonomia. Teste automatizado não substitui isso.

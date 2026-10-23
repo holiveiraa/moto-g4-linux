@@ -2,7 +2,8 @@
 
 The repository documentation works immediately through ordinary GitHub links.
 The optional Wiki presents the same material as a browsable handbook, with Home,
-sidebar, hardware matrix, agent installation, builds, usage and troubleshooting.
+sidebar, Hermes setup/server-agent tutorial, screenshots, terminal usage,
+hardware matrix, installation, builds and troubleshooting.
 
 GitHub keeps a Wiki in its **own Git repository**. Creating files under `wiki/`
 in the source repository does not automatically publish them to the Wiki.
@@ -35,6 +36,24 @@ the source revision being published, review the Markdown and push an ordinary
 commit. Do not force-push or overwrite unrelated community pages. Source and
 Wiki are separate histories; a successful source push does not update the Wiki.
 For a fork, pass that fork's actual repository URL to the exporter.
+
+For example, from the source checkout after its checks pass:
+
+```sh
+python3 scripts/export-wiki.py \
+  --repository-url https://github.com/holiveiraa/moto-g4-linux
+git clone https://github.com/holiveiraa/moto-g4-linux.wiki.git ../moto-g4-linux-wiki
+git -C ../moto-g4-linux-wiki pull --ff-only
+cp out/wiki/*.md ../moto-g4-linux-wiki/
+git -C ../moto-g4-linux-wiki diff
+```
+
+Review the generated page list and the source revision before committing and
+pushing the separate Wiki checkout. Its Home and sidebar should expose
+**Hermes-Server-Agent**, **Hermes-Setup**, **Hermes-Quickstart-PT** and
+**Screenshots**. Keep the existing **Hermes-Assistant-Plan** URL for research
+links even though that page now documents the implementation too. The exporter
+rewrites both Markdown images and HTML screenshot galleries to public asset URLs.
 
 Maintain the guides in `docs/` (and the mapped credits/testing/license files),
 then re-export. The Wiki is a view of the source docs, not a second installation

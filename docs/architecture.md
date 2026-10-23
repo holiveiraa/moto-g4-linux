@@ -14,7 +14,8 @@ flowchart TD
     X --> S[Saved SSH destinations / OpenSSH or Tailscale SSH]
     X --> Q[Microphone / optional Groq dictation]
     X --> HC[Optional Rust Hermes companion / Tk host]
-    HC --> HG[Authenticated Umbrel / Hermes gateway]
+    HC --> HG[Existing Umbrel app gateway / login]
+    HG --> HA[Hermes built-in chat / audio APIs]
 ```
 
 ## Layers and source locations
@@ -32,11 +33,20 @@ flowchart TD
 | Network | `moto-wifi*.py`, `moto-services.py` | Saved profiles, guarded operations, distinct VPN state |
 | SSH | `moto-hosts.py`, `moto-ssh-*.py` | Private endpoint-bound credentials, argv, host-key checks |
 | Audio/voice | `moto-audio*.py`, `moto-voice*.py`, `moto-quick-voice.py` | Native ALSA; cloud transcription is optional |
-| Optional companion | `companion/`, `moto-hermes*.py`, `moto-capture.py` | Rust protocol/state/face/speech, native form focus, shared capture lease; source preview |
+| Optional companion | `companion/`, `moto-hermes*.py`, `moto-capture.py` | Rust protocol/state/face/speech, native form focus, shared capture lease; experimental app |
 
 The [companion setup](hermes-setup.md) documents its independent build, private
 login, provider setup and pending device acceptance. It uses the existing
-Hermes APIs without installing a server plugin.
+Hermes APIs without installing a server plugin when the inspected contracts
+match. [Hermes itself prepares its app/profile](hermes-server-agent.md); the
+client agent handles only the phone. Umbrel gateway/login/TLS remain in place.
+
+The app is a client of the existing Hermes, not another agent model on the
+phone. The local wake helper processes standby audio without a network client.
+Only post-activation speech goes to Groq; text then goes through the protected
+Hermes chat API and replies through its Edge speech relay. The phone owns its
+conversation ID in the configured profile. Closing retains it; **Nova conversa**
+replaces it after server confirmation. Telegram sessions are not merged.
 
 ## Important adaptations
 

@@ -20,6 +20,12 @@ class Wiki(unittest.TestCase):
             self.assertIn('https://raw.githubusercontent.com/example/moto-g4-linux/main/docs/assets/banner.svg',home)
             self.assertIn('https://github.com/example/moto-g4-linux/wiki/Portugues',home)
             self.assertTrue((Path(temp)/'_Sidebar.md').exists())
+            portuguese=(Path(temp)/'Portugues.md').read_text()
+            self.assertIn('src="https://raw.githubusercontent.com/example/moto-g4-linux/main/docs/assets/hermes.png"',portuguese)
+            self.assertNotIn('src="docs/assets/',portuguese)
+            for name in ('Hermes-Server-Agent','Hermes-Setup','Hermes-Quickstart-PT','Screenshots'):
+                self.assertIn('/wiki/'+name,home)
+                self.assertTrue((Path(temp)/(name+'.md')).exists())
             for page in Path(temp).glob('*.md'):
                 content=page.read_text()
                 self.assertNotIn('{{REPOSITORY_URL}}',content)

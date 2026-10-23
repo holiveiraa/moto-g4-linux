@@ -8,7 +8,9 @@ without push-to-talk. **Nova conversa** creates a fresh context; closing returns
 to the existing terminal.
 
 **Experimental, with reference-device fixtures; live voice acceptance pending.** Read the canonical
-[setup guide](../docs/hermes-setup.md) and
+[first connection/setup guide](../docs/hermes-setup.md#first-connection-checklist),
+[tutorial em português](../docs/hermes-quickstart.pt-BR.md),
+[instructions to send your Hermes server](../docs/hermes-server-agent.md) and
 [research/design](../docs/hermes-assistant.md). No personal account state,
 configured rootfs or public flashable image is supplied.
 

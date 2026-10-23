@@ -1,15 +1,100 @@
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="Moto G4 Linux — Hermes com rosto e voz, terminal Linux sempre à mão" width="940">
+</p>
+
 # Moto G4 Linux
 
-Um Linux nativo para dar uma segunda vida ao Moto G4 Plus: teclado de toque,
-abas SSH, Wi-Fi salvo, Tailscale, áudio e ditado. O protótipo liga e desliga sem
-PC e usa Alpine, Xorg, xterm/tmux e uma interface Python/Tk.
+**Seu Hermes com rosto e voz. Seu terminal Linux sempre à mão.**
+Uma segunda vida para o Moto G4 Plus: um companheiro animado em tela cheia e
+um terminal de verdade, com teclado de toque, abas persistentes, SSH e Tailscale.
+O protótipo usa Alpine Linux, Xorg e xterm/tmux e liga sem um PC.
 
-**Estado:** código experimental, validado numa unidade XT1640 / athene P2A,
-2 GB / 32 GB. Não há instalador universal nem imagem pública pronta. O kernel é
-3.10.108; suspensão, bloqueio de tela, fones/BT/modem e outros modelos continuam
-pendentes. [Matriz completa](docs/status.md).
+[Configurar o Hermes](docs/hermes-quickstart.pt-BR.md) ·
+[Guia para enviar ao Hermes servidor](docs/hermes-server-agent.md) ·
+[Instalar Linux com seu agente](docs/agent-installation.md) ·
+[Wiki](https://github.com/holiveiraa/moto-g4-linux/wiki) · [English](README.md)
 
-## Instale com seu agente
+## Um Hermes vivo no seu celular
+
+Abra **Painel → Hermes**. A interface vira um bichinho de olhos animados.
+Diga **“Olá Hermes”**, espere **“Olá! Estou ouvindo.”** e faça seu pedido.
+Ele detecta o fim da fala, consulta seu Hermes, responde em voz e volta a ouvir.
+Você não precisa tocar num botão nem repetir a ativação a cada pergunta.
+
+<p align="center">
+  <img src="docs/assets/hermes.png" alt="Rosto do Hermes em tela cheia, no estado Pode falar" width="240">
+  <img src="docs/assets/terminal.png" alt="Terminal Linux com abas e teclado de toque" width="240">
+  <img src="docs/assets/panel.png" alt="Painel atual com acesso ao Hermes, SSH e controles do sistema" width="240">
+</p>
+
+São capturas da interface real com dados fictícios em telas virtuais isoladas.
+A imagem do Hermes foi capturada no Moto; terminal e painel foram renderizados
+em Linux a partir do fonte atual. Não representam uma conversa real já validada.
+[Galeria e procedência das imagens](docs/screenshots.md).
+
+- **“Olá Hermes”**: ativação local, somente enquanto o app está aberto.
+- **Conversa sem apertar botão**: Groq transcreve as falas após ativação; o
+  próprio Hermes usa Edge TTS para responder. A conversa exige internet.
+- **Seu agente existente**: usa o perfil escolhido, com uma conversa própria
+  do Moto, mantida ao fechar e reabrir. Não se mistura com o Telegram.
+- **“Nova conversa”**: muda de contexto sem carregar o assunto anterior nem
+  apagar chats antigos. O perfil continua o mesmo.
+- **“Voltar a dormir”**: volta a esperar a ativação. **“Voltar ao terminal”**
+  ou **“Fechar aplicativo”** fecha o app e libera o áudio. O × também fecha.
+- **Login Umbrel preservado**: só senha se você não usa 2FA; código apenas se
+  sua conta exigir. Wi-Fi ou Tailscale fornece a rota que você já utiliza.
+
+**Estado experimental:** instalado no Moto de referência, com testes Rust/Tk e
+protocolos passando no aparelho. Precisão da ativação com sua voz, ruído,
+calor/autonomia e conversa real Groq → Hermes → Edge ainda precisam de aceitação
+física. [Resultados e limites](docs/status.md).
+
+## Configure os dois lados
+
+1. **No Hermes servidor:** envie o texto abaixo. O próprio Hermes confere sua
+   versão, faz backup e prepara o perfil/Edge TTS dentro do próprio app.
+2. **No Moto:** com os componentes instalados, abra
+   **Painel → Hermes → ··· → Configurar**, informe a URL HTTPS do app, conta e
+   perfil. Configure sua chave Groq em **Voz e áudio → Groq** e faça login.
+3. **Teste:** diga “Olá Hermes”, espere a confirmação e faça uma pergunta
+   simples. Confira a resposta falada, a escuta automática e “Nova conversa”.
+
+**Copie e envie ao seu Hermes:**
+
+> Prepare sua parte para meu app do Moto usando
+> https://github.com/holiveiraa/moto-g4-linux. Leia AGENTS.md,
+> docs/hermes-server-agent.md e docs/hermes-setup.md. Trabalhe somente dentro
+> do próprio app/runtime e dos dados do perfil Hermes. Confira as APIs
+> existentes, faça backup e prepare o Edge TTS, preservando meu Telegram.
+> Nunca acesse nem altere o host do Umbrel, Docker, gateway, autenticação,
+> portas ou serviços. Informe o perfil, a voz, os testes e o que falta testar
+> no Moto.
+
+O [tutorial passo a passo](docs/hermes-quickstart.pt-BR.md) explica os campos,
+senha com/sem 2FA, certificado, perfil, sessão e primeiro teste.
+O [guia do Hermes servidor](docs/hermes-server-agent.md) descreve exatamente
+o que ele precisa verificar. **Não precisa instalar um plugin extra quando as
+APIs documentadas correspondem à versão instalada.** O gateway Umbrel faz o
+login; o app conversa com as APIs do Hermes por trás dessa proteção.
+
+## Um terminal que cabe no bolso
+
+- Teclas Esc, Ctrl, Alt, Tab, setas, repetição e páginas Term/Code/PT com acentos.
+- Abas xterm/tmux que sobrevivem ao reinício da interface gráfica.
+- Wi-Fi salvo, cadastro Tailscale por QR e favoritos SSH com verificação de chave.
+- Senha SSH opcional e entrada manual para senha/2FA.
+- Ditado com sua chave Groq: insere UTF-8 no campo ou terminal **sem Enter**.
+- Temas Jade, Meia-noite e Papel; brilho, volume, áudio nativo e menu de energia.
+
+O terminal continua útil antes de configurar o Hermes e ao fechar o app.
+[Guia de uso](docs/user-guide.md) · [Telas do sistema](docs/screenshots.md).
+
+## Instale Linux com seu agente
+
+**Código experimental para XT1640 / athene P2A, 2 GB / 32 GB.** Não há
+instalador universal nem imagem pública pronta. Outro modelo exige investigação.
+O kernel é 3.10.108; suspensão, bloqueio de tela, fones/BT/modem e outros modelos
+continuam pendentes. [Compatibilidade](docs/status.md).
 
 Abra o repositório no Codex, Claude Code ou agente local e envie:
 
@@ -19,36 +104,23 @@ Abra o repositório no Codex, Claude Code ou agente local e envie:
 > de desbloquear, formatar ou gravar, mostre o plano exato e aguarde minha
 > autorização. Use minhas próprias chaves e firmware, sem copiar outra identidade.
 
-O [guia para agentes](docs/agent-installation.md) organiza as fases e os critérios
-para avançar. A pessoa ainda aceita os avisos físicos, entra nas próprias contas
-e informa segredos diretamente nos formulários.
-
-Depois: Wi-Fi pelo painel, cadastro Tailscale por QR e favoritos SSH com senha
-opcional. O microfone transcreve com sua chave Groq e insere na aba sem Enter.
-[Guia de uso](docs/user-guide.md).
-
-## App Hermes opcional
-
-A nova prévia abre um bichinho em tela cheia: rosto animado, ativação local por
-“Olá Hermes”, conversa por voz sem apertar botão e retorno ao terminal ao fechar.
-“Nova conversa” inicia um contexto novo no mesmo perfil. Usa Rust, Groq para
-transcrever as falas após ativação e Edge no próprio Hermes para responder.
-O login aceita senha Umbrel sem 2FA ou pede código quando a conta exige.
-
-A tela e o fluxo passam por testes isolados; o wake word ainda precisa de
-aceitação física de precisão, velocidade e aquecimento no Moto. O painel antigo foi substituído no Moto de referência; falta configurar a
-conexão e validar a conversa real. Veja [setup e limites](docs/hermes-setup.md)
-e [pesquisa](docs/hermes-assistant.md). O próprio Hermes prepara a parte do
-servidor com [estas instruções](docs/hermes-server-agent.md), dentro de seu app.
-Nunca acesse ou administre o host do Umbrel para essa integração.
+O [guia para agentes](docs/agent-installation.md) organiza as fases. Cada pessoa
+usa suas contas, firmware e chaves; imagens pessoais não são distribuídas.
+Se o Linux já funciona no seu Moto, siga somente o
+[build/instalação do app Hermes](docs/hermes-setup.md), sem reinstalar o sistema.
 
 ## Explore
 
-[Documentação](docs/README.md) · [Instalação](docs/installation.md) ·
-[Build](docs/building.md) · [Arquitetura](docs/architecture.md) ·
-[Diagnóstico](docs/troubleshooting.md) · [Contribuir](CONTRIBUTING.md) ·
-[Créditos](CREDITS.md) · [Wiki](https://github.com/holiveiraa/moto-g4-linux/wiki).
+| Objetivo | Guia |
+| --- | --- |
+| Começar a conversar com o Hermes | [Tutorial em português](docs/hermes-quickstart.pt-BR.md) |
+| Dar instruções ao Hermes servidor | [Guia para o agente](docs/hermes-server-agent.md) |
+| Compilar/instalar o app | [Setup técnico](docs/hermes-setup.md) |
+| Conhecer referências e decisões | [Pesquisa Hermes](docs/hermes-assistant.md) |
+| Usar ou divulgar o sistema | [Galeria de imagens](docs/screenshots.md), [guia de uso](docs/user-guide.md) |
+| Instalar a base Linux | [Instalação](docs/installation.md), [build](docs/building.md) |
+| Contribuir | [Documentação](docs/README.md), [testes](tests/README.md), [contribuição](CONTRIBUTING.md) |
 
 Código próprio, documentação e arte: MIT, com exceções de kernel/lk2nd em
-[LICENSES/README.md](LICENSES/README.md). Firmware, chaves e dados particulares
-não são distribuídos. [README completo em inglês](README.md).
+[LICENSES/README.md](LICENSES/README.md). Veja [créditos](CREDITS.md) e
+[avisos](NOTICE.md). Firmware, chaves e dados particulares não são distribuídos.

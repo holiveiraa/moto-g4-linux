@@ -1,5 +1,32 @@
 # Using the phone
 
+## Hermes: open a voice companion, return to your terminal
+
+After [first connection setup](hermes-setup.md#first-connection-checklist), open
+**Painel → Hermes**. A fullscreen animated face replaces the terminal view.
+Say **Olá Hermes**, wait for **Olá! Estou ouvindo.**, then ask your question.
+The app detects the end of your speech, transcribes with Groq, asks your
+existing Hermes and speaks through its Edge TTS service. It then listens again
+without another tap or wake phrase.
+
+- **Nova conversa** starts a fresh Moto context in the same profile. Earlier
+  chats remain on the server; Telegram and permanent profile memory are separate.
+- **Voltar a dormir** returns to local activation.
+- **Voltar ao terminal**, **Fechar aplicativo** or **×** closes the app,
+  releases its audio and restores the existing terminal sessions.
+- **···** or holding the face opens setup, text/history and recovery controls.
+
+The selected Moto conversation persists when reopening the app. Initial setup
+uses private touch fields; normal conversation is by voice. Capture pauses
+while transcribing, waiting for a reply and speaking. Voice interruption during
+playback is not established. Closing or blanking stops listening.
+
+The app is experimental; live voice/noise/heat acceptance is still required.
+See [tutorial em português](hermes-quickstart.pt-BR.md),
+[instructions to give your Hermes server](hermes-server-agent.md) and
+[interface images](screenshots.md). The following terminal features work
+independently of configuring Hermes.
+
 ## Power and everyday controls
 
 Short Power toggles the screen. Hold for about 1.2 seconds and release to open

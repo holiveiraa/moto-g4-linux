@@ -4,6 +4,12 @@ Start with the [agent workflow](agent-installation.md). Installation is currentl
 an engineering task for the confirmed hardware, not a one-command installer.
 No prebuilt public image is provided, and another owner's images are not inputs.
 
+**Already running this Linux port?** Configuring the Hermes companion does not
+require reflashing. Follow [its userspace build/setup](hermes-setup.md), or the
+[Portuguese first-connection tutorial](hermes-quickstart.pt-BR.md) if its runtime
+components are installed. Give the server instructions to
+[Hermes itself](hermes-server-agent.md); never use Umbrel host access.
+
 ## Prerequisites
 
 - A compatible Moto G4 Plus, charged and with a reliable data USB cable.

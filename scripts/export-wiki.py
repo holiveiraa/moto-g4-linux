@@ -22,24 +22,31 @@ def export(repository,output,branch='main',project=PROJECT):
     reverse={(project/source).resolve():page for page,source in mapping.items()}
     raw='https://raw.githubusercontent.com/'+urlsplit(repository).path.strip('/')+'/'+quote(branch,safe='/')
     def convert(source,text):
-        def link(match):
-            prefix,target=match.group(1),match.group(2)
-            if urlsplit(target).scheme or target.startswith('#'):return match[0]
+        def target_url(target,is_image=False):
+            if urlsplit(target).scheme or target.startswith('#'):return target
             relative,separator,anchor=target.partition('#')
             resolved=(source.parent/relative).resolve()
             if not resolved.is_relative_to(project):raise ValueError('Link escapes project: '+relative)
             if not resolved.exists():raise ValueError('Missing link: '+relative)
             suffix=('#'+anchor) if separator else ''
-            if prefix.startswith('!'):
+            if is_image:
                 url=raw+'/'+resolved.relative_to(project).as_posix()
             elif resolved in reverse:
                 url=repository+'/wiki/'+quote(reverse[resolved])
             else:
                 url=repository+'/blob/'+quote(branch,safe='/')+'/'+resolved.relative_to(project).as_posix()
-            return prefix+url+suffix+')'
+            return url+suffix
+        def link(match):
+            prefix,target=match.group(1),match.group(2)
+            return prefix+target_url(target,prefix.startswith('!'))+')'
+        def html_image(match):
+            return match.group(1)+target_url(match.group(2),True)+match.group(3)
+        def prose(block):
+            block=re.sub(r'(!?\[[^\]]*\]\()([^\s)]+)\)',link,block)
+            return re.sub(r'(<img\b[^>]*\bsrc=")([^"]+)(")',html_image,block)
         # Protect shell snippets with parentheses/relative paths from rewriting.
         blocks=re.split(r'(```.*?```)',text,flags=re.S)
-        return ''.join(block if block.startswith('```') else re.sub(r'(!?\[[^\]]*\]\()([^\s)]+)\)',link,block) for block in blocks)
+        return ''.join(block if block.startswith('```') else prose(block) for block in blocks)
     prepared={}
     for page,relative in mapping.items():
         if not re.fullmatch(r'[A-Za-z0-9-]+',page):raise ValueError('Invalid wiki page name')

@@ -6,6 +6,10 @@ prototype, not a new flashable release or a fresh installation validation.
 
 ![Panel and appearance preview with synthetic test data](assets/experience.png)
 
+This is the dated 22 October theme review, before the Hermes launcher was
+added. For current face, terminal and panel images, use the
+[screenshot gallery](screenshots.md).
+
 ## Included
 
 - **Integrated appearance:** **Panel → Appearance** offers Jade, Midnight and Paper palettes for panel,

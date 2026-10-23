@@ -55,6 +55,8 @@ repository include:
 - Saved Wi-Fi behavior/rollback, distinct Tailscale and SSH panels, QR handling,
   saved destinations and optional endpoint-bound SSH passwords.
 - Groq capture/transcription/review and keyboard dictation that pastes without Enter.
+- Fullscreen Hermes companion, original vector face, Rust conversation/auth/audio
+  client, local activation integration and separate-context voice commands.
 - Isolated regressions, real PTY/OpenSSH fixture checks and agent-facing documentation.
 
 Groq is an external optional transcription service, not a locally implemented

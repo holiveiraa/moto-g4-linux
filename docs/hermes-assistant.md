@@ -1,4 +1,4 @@
-# Hermes companion app: research and implementation plan
+# Hermes companion app: research and implementation
 
 Research date: **22 October 2026**. Status: **implemented source preview,
 fullscreen voice-pet revision built for ARM64 musl; host/native UI and synthetic wake reviewed; installed on the reference Moto; live voice pending**. This document
@@ -383,14 +383,16 @@ real accounts. Then add one typed Hermes round trip, one recorded utterance,
 and one spoken answer, in that order. This produces reviewable increments
 without making a working terminal depend on an unfinished voice assistant.
 
-## Initial planning checkpoint (before implementation)
+## Initial planning checkpoint (historical, before implementation)
 
 On 22 October 2026, a Linux-filesystem copy containing only public candidate
 files passed `scripts/check-repository.py` and all **101 existing offline tests**
 through `scripts/run-tests.py`. The Wiki exporter generated **19 files locally**,
 including this plan. No source or Wiki content was published. No new Rust tests,
 live login, speech-provider call, device deployment or physical acceptance test
-was performed; those belong to the implementation stages above.
+was performed at that planning checkpoint. This paragraph is historical, not
+the current publication/deployment state; see the implementation evidence below
+and [current status](status.md).
 
 ## Implemented preview and remaining gates
 

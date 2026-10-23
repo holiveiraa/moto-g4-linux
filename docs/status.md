@@ -1,6 +1,6 @@
 # Hardware and project status
 
-Evidence reviewed: **22 October 2026**. The working prototype has been exercised
+Evidence reviewed: **23 October 2026**. The working prototype has been exercised
 on one **Motorola Moto G4 Plus XT1640, athene P2A, 2 GB RAM / 32 GB storage**,
 with its original **Athene_16MP** hardware description. No other variant is
 certified by this project. Product-family similarity does not establish matching
@@ -25,6 +25,11 @@ panel, touch, amplifier, memory layout or partition geometry.
 | Native microphone | Working | Physical speech recording and transcription |
 | Speaker / volume buttons | Working | Owner-confirmed after unplugged power cycle |
 | Groq dictation / keyboard mic | Working | Real transcription; inserts without Enter |
+| Hermes fullscreen companion | Installed; native fixtures pass | Real wake/noise, heat/battery and complete live conversation still pending |
+
+For the Hermes app, start with the [first connection checklist](hermes-setup.md#first-connection-checklist),
+[Portuguese tutorial](hermes-quickstart.pt-BR.md) and
+[instructions to give Hermes itself](hermes-server-agent.md).
 
 ## Not established
 
@@ -170,7 +175,9 @@ Moto-owned context; closing restores the terminal. No push-to-talk main flow.
 - This reference installation has no Hermes connection configuration yet.
   Actual-owner wake/noise acceptance, CPU/heat/battery, live account/CA and
   Groq/Edge remain unverified. The first-use connection setup and a fresh second
-  installation remain open. Repository changes remain local. Hermes itself
+  installation remain open. The app source was published in commit
+  [`6b1014e`](https://github.com/holiveiraa/moto-g4-linux/commit/6b1014ead2e8f8f69d8c0a2b001c7d07dc106512),
+  with both GitHub Actions jobs passing. Hermes itself
   handles only its own app/profile setup using the
   [server-agent instructions](hermes-server-agent.md).
 

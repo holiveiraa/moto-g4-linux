@@ -5,6 +5,17 @@ owner supplies the published repository URL. The Moto/client agent prepares the
 phone and repository. Hermes configures its own side. Neither workflow
 administers the Umbrel host.
 
+**Owner: send this guide to your running Hermes.** Copy the prompt below;
+the published repository URL is already filled in. Phone setup is a separate
+step: [first connection](hermes-setup.md#first-connection-checklist) or
+[tutorial em português](hermes-quickstart.pt-BR.md). The client agent must not
+execute these server-side changes on Hermes's behalf.
+
+Your job here is to verify the existing APIs and prepare Edge TTS in the agreed
+profile. There is **no mandatory extra plugin** for the implemented v0.22.4
+contract. Return the profile, voice and test results so the owner can finish
+the phone's private connection form.
+
 ## Hard boundary
 
 Never SSH to the Umbrel host, open a host shell, run host-management commands,
@@ -23,11 +34,12 @@ host commands as a workaround.
 
 ## Owner prompt
 
-After the companion changes have been published, send Hermes the repository
-URL and this prompt. Replace the placeholder with the real published URL or
-commit; never invent a release that has not been pushed.
+Send this prompt to the Hermes instance you already use. For a fork, replace
+the repository URL with that fork's published URL. Pin a real published commit
+if you need a fixed source revision; do not invent a binary release.
 
-> Prepare your Hermes side for my Moto companion from REPOSITORY_URL. Read
+> Prepare your Hermes side for my Moto companion from
+> https://github.com/holiveiraa/moto-g4-linux. Read
 > AGENTS.md, docs/hermes-server-agent.md and docs/hermes-setup.md. Work only
 > inside your own Hermes app/runtime and profile data. Never access or change
 > the Umbrel host, Docker, gateway, authentication, ports or services. Inspect
@@ -39,7 +51,8 @@ commit; never invent a release that has not been pushed.
 
 Em português:
 
-> Prepare sua parte do Hermes para meu app do Moto a partir de REPOSITORY_URL.
+> Prepare sua parte do Hermes para meu app do Moto a partir de
+> https://github.com/holiveiraa/moto-g4-linux.
 > Leia AGENTS.md, docs/hermes-server-agent.md e docs/hermes-setup.md. Trabalhe
 > somente dentro do seu próprio app/runtime e dos dados do perfil Hermes.
 > Nunca acesse nem altere o host do Umbrel, Docker, gateway, autenticação,
@@ -126,8 +139,9 @@ or always-listening process needs to be installed in Hermes for this client.
 
 The Moto keeps its own conversation ID in the selected profile across app
 opens. The spoken **Nova conversa** action creates a fresh conversation only
-after checking that the old turn is settled; it does not delete previous chats
-or reset Telegram. Do not merge/broadcast other clients' sessions into it.
+after checking that the old turn is settled; it does not delete previous chats,
+erase durable profile memory, change tools or reset Telegram. Do not
+merge/broadcast other clients' sessions into it.
 
 ## Validate and hand back
 
@@ -141,6 +155,9 @@ The owner supplies the actual application URL to the phone and enters the
 Umbrel password there. If the account has no 2FA, enter only the password; if
 Umbrel challenges for a code, the phone asks for it. Do not enable/disable 2FA,
 extract Umbrel account secrets or export browser cookies to make onboarding work.
+The current client requires an existing HTTPS application entry. If the owner
+only has HTTP access, report that missing capability rather than attempting
+host/proxy/port changes. App-local Edge success does not solve that boundary.
 
 Return a short report: installed Hermes version, agreed profile, confirmed Edge
 voice, which app-local checks passed, backup/rollback location, any app-runtime

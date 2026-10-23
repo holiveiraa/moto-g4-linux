@@ -13,13 +13,18 @@
 - [User guide]({{REPOSITORY_URL}}/wiki/User-Guide)
 - [Troubleshooting]({{REPOSITORY_URL}}/wiki/Troubleshooting)
 
+### Hermes companion
+
+- **[Configurar em português]({{REPOSITORY_URL}}/wiki/Hermes-Quickstart-PT)**
+- **[Instructions for your Hermes server]({{REPOSITORY_URL}}/wiki/Hermes-Server-Agent)**
+- [Phone setup / first connection]({{REPOSITORY_URL}}/wiki/Hermes-Setup)
+- [Face, terminal & screenshots]({{REPOSITORY_URL}}/wiki/Screenshots)
+- [Research & implementation]({{REPOSITORY_URL}}/wiki/Hermes-Assistant-Plan)
+
 ### Development
 
 - [Building]({{REPOSITORY_URL}}/wiki/Building)
 - [Architecture]({{REPOSITORY_URL}}/wiki/Architecture)
-- [Hermes app plan]({{REPOSITORY_URL}}/wiki/Hermes-Assistant-Plan)
-- [Hermes setup]({{REPOSITORY_URL}}/wiki/Hermes-Setup)
-- [Hermes-side agent]({{REPOSITORY_URL}}/wiki/Hermes-Server-Agent)
 - [Testing]({{REPOSITORY_URL}}/wiki/Testing)
 - [Contributing]({{REPOSITORY_URL}}/wiki/Contributing)
 

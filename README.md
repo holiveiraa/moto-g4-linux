@@ -1,12 +1,15 @@
 <p align="center">
-  <img src="docs/assets/banner.svg" alt="Moto G4 Linux — a terminal-first second life" width="940">
+  <img src="docs/assets/banner.svg" alt="Moto G4 Linux — a living Hermes companion and a real Linux terminal" width="940">
 </p>
 <p align="center">
-  <b>A small phone. A real Linux terminal. Your own network and servers.</b><br>
-  Native Linux for the Moto G4 Plus, with a touch interface built for SSH.
+  <b>Your Hermes, with a face and a voice. Your Linux terminal, always there.</b><br>
+  Turn a retired Moto G4 Plus into a voice companion and a pocket SSH terminal.
 </p>
 <p align="center">
-  <a href="docs/agent-installation.md">Install with your agent</a> ·
+  <a href="#bring-your-hermes-to-life">Meet Hermes</a> ·
+  <a href="docs/hermes-setup.md#first-connection-checklist">Configure the app</a> ·
+  <a href="docs/hermes-server-agent.md">Instructions for your Hermes server</a> ·
+  <a href="docs/agent-installation.md">Install Linux</a> ·
   <a href="docs/status.md">Hardware status</a> ·
   <a href="docs/README.md">Documentation</a> ·
   <a href="https://github.com/holiveiraa/moto-g4-linux/wiki">Wiki</a> ·
@@ -14,7 +17,71 @@
   <a href="README.pt-BR.md">Português</a>
 </p>
 
-## A second life for a retired phone
+## Bring your Hermes to life
+
+Open **Painel → Hermes** and the terminal gives way to an animated character.
+Say **“Olá Hermes”**, wait for its spoken acknowledgment, then talk naturally:
+it listens when you finish, asks **your existing Hermes Agent**, speaks the reply
+and listens again. Say **“Nova conversa”** to change context or **“Voltar ao
+terminal”** to close the app and return to your terminal sessions.
+
+<p align="center">
+  <img src="docs/assets/hermes.png" alt="Hermes fullscreen face in its listening state" width="240">
+  <img src="docs/assets/terminal.png" alt="Linux terminal with persistent tabs and the native touch keyboard" width="240">
+  <img src="docs/assets/panel.png" alt="Current home panel with Hermes, SSH, audio and appearance launchers" width="240">
+</p>
+
+Actual application rendering with synthetic demo data, captured in isolated
+virtual displays. Hermes's image was captured on the reference Moto; the current
+terminal/panel images were rendered on Linux from the same UI source. These are
+interface previews, not evidence of a live agent conversation. See
+[screenshots and provenance](docs/screenshots.md).
+
+- **A living fullscreen face:** animated eyes and expressions, no chat form in
+  the main voice flow. Local activation runs only while the app is open.
+- **Hands-free turns:** local “Olá Hermes” detection, Groq transcription after
+  activation and server-side Edge TTS. No push-to-talk between questions.
+- **Your agent and tools:** the chosen Hermes profile, with a separate Moto
+  conversation retained across opens. **Nova conversa** starts a fresh one
+  without resetting Telegram or deleting earlier chats.
+- **Your existing Umbrel protection:** password-only accounts work; a code is
+  requested only if the account requires 2FA. Wi-Fi or Tailscale supplies the route.
+- **Back to Linux whenever you want:** closing releases capture/playback and
+  restores the terminal; GUI restarts preserve tmux sessions.
+
+**Experimental:** the app is installed on the reference Moto and passes host
+and native fixtures. Real-owner wake accuracy, heat/battery and the complete
+Groq → Hermes → Edge conversation still need physical acceptance. Local wake
+does not make conversation offline: transcription and synthesis need internet.
+[Evidence and limits](docs/status.md#fullscreen-hermes-voice-pet-revision--installed-live-voice-pending).
+
+## Connect your Hermes: two sides, one setup
+
+**Start here:** [phone setup and first connection](docs/hermes-setup.md#first-connection-checklist)
+or [tutorial completo em português](docs/hermes-quickstart.pt-BR.md).
+
+| Side | What to do |
+| --- | --- |
+| **Hermes server** | Give your running Hermes the prompt below and the [server-agent guide](docs/hermes-server-agent.md). It checks its own version/profile and prepares Edge speech inside its own app runtime. |
+| **Moto app** | Install the matching userspace components, then enter your HTTPS app URL, account/profile, CA if needed and your own Groq key. Log in on the phone. [Build/install/configuration](docs/hermes-setup.md). |
+
+**Copy this to your Hermes server agent:**
+
+> Prepare your side for my Moto companion from
+> https://github.com/holiveiraa/moto-g4-linux. Read AGENTS.md,
+> docs/hermes-server-agent.md and docs/hermes-setup.md. Work only inside your
+> own Hermes app/runtime and profile data. Check the existing chat/audio APIs,
+> back up configuration and prepare Edge TTS, preserving Telegram. Never access
+> or change the Umbrel host, Docker, gateway, login, ports or services. Report
+> the profile, voice, checks and anything still requiring a Moto test.
+
+This reuses Hermes's built-in authenticated APIs; **no extra server plugin is
+needed when the documented API contracts match**. Umbrel's gateway remains the
+login boundary; conversation and speech go to Hermes behind it. A version
+mismatch must be resolved within Hermes's supported app facilities.
+[Server responsibilities and compatibility](docs/hermes-server-agent.md).
+
+## A real Linux terminal in your pocket
 
 Boot directly into **Alpine Linux**, with Xorg, xterm/tmux and a Python/Tk touch
 shell. The working prototype powers on and shuts down without a PC.
@@ -29,27 +96,16 @@ shell. The working prototype powers on and shuts down without a PC.
 - **Touch-first controls:** visible field focus/carets, brightness, volume,
   native speaker/microphone and a power menu.
 
-**Optional Hermes companion (experimental):** a fullscreen animated face with
-local “Olá Hermes” activation, automatic voice turns, “Nova conversa” and return
-to the terminal. Rust core, Groq transcription and server-side Edge speech,
-with Umbrel password-only or optional 2FA login.
-[Setup and current limits](docs/hermes-setup.md). The fullscreen revision passes
-host/native fixtures and fullscreen UI review, and is installed on the reference
-Moto. Actual-owner wake/voice and first connection setup remain pending. For server setup, give Hermes its
-[app-local instructions](docs/hermes-server-agent.md). Never administer the
-Umbrel host for this integration.
-
-## A look at the interface
+## Connections and everyday controls
 
 <p align="center">
-  <img src="docs/assets/panel.png" alt="Home panel with brightness, volume and separate connections" width="240">
   <img src="docs/assets/wifi.png" alt="Wi-Fi page with a saved network and nearby networks" width="240">
   <img src="docs/assets/ssh.png" alt="SSH favorites with separate SSH and Tailscale SSH examples" width="240">
 </p>
 
-Actual Tk rendering captured on the Moto in an isolated virtual display, using
-synthetic networks, servers and status values. The current UI is in Brazilian
-Portuguese; the public guides are in English, with a Portuguese entry point.
+These connection screens were captured on the Moto using synthetic networks,
+servers and status values. The UI is in Brazilian Portuguese. The handbook is
+in English, with a Portuguese README and Hermes walkthrough.
 
 ## Start with an agent
 
@@ -79,6 +135,7 @@ silently format a connected phone. [Installation and recovery](docs/installation
 | Saved Wi-Fi / Tailscale / SSH | Physical Wi-Fi and Tailscale SSH use | QR login needs a browser on another device |
 | Speaker / microphone / volume / dictation | Physical use after an unplugged power cycle | Headset/BT/calls not established |
 | Optional SSH password / host checks | Real phone OpenSSH against an isolated fixture | Private files, not encrypted storage |
+| Hermes face / local activation / voice flow | Installed; native Rust/Tk and synthetic audio/protocol reviews | Real wake/noise, heat/battery and live conversation pending |
 | Fresh install on another unit | Agent workflow documented | Independent reproduction still needed |
 
 The [full matrix](docs/status.md) separates physical tests from simulations. The
@@ -91,7 +148,10 @@ locking and a maintained kernel remain open work.
 | --- | --- |
 | Install with an agent | [Agent workflow](docs/agent-installation.md) |
 | Understand prerequisites/recovery | [Installation](docs/installation.md) |
-| Set up the optional Hermes app | [Companion setup](docs/hermes-setup.md), [research](docs/hermes-assistant.md) |
+| Connect the Hermes companion | [First connection](docs/hermes-setup.md#first-connection-checklist), [tutorial em português](docs/hermes-quickstart.pt-BR.md) |
+| Let your Hermes prepare its server side | [Instructions to send Hermes](docs/hermes-server-agent.md) |
+| Build the Rust client / understand the design | [Companion setup](docs/hermes-setup.md), [research](docs/hermes-assistant.md) |
+| Use/share interface images | [Screenshot gallery and provenance](docs/screenshots.md) |
 | Use the phone | [User guide](docs/user-guide.md) |
 | Build kernel/boot components | [Building](docs/building.md) |
 | Understand the system | [Architecture](docs/architecture.md) |

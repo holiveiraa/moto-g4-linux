@@ -5,6 +5,20 @@ the working directory, not a synchronized Windows folder. Python 3.10+, Git,
 curl, make and the documented toolchains are required. A build does not access
 the phone unless you separately invoke a maintenance/install operation.
 
+## Hermes companion builds
+
+The optional fullscreen app has an independent Rust build and a pinned local
+activation helper/model. Use [the companion build guide](hermes-setup.md#build-from-public-source)
+and [local activation build](hermes-setup.md#build-the-local-activation-component).
+The base userspace assembler copies its Python UI modules; Rust/helper/model
+artifacts must be built and installed separately as a matching set. You do not
+need to rebuild the kernel or boot images to add this app to a working system.
+
+For an already installed runtime, start with
+[first connection](hermes-setup.md#first-connection-checklist). Server setup is
+performed by [Hermes inside its own app](hermes-server-agent.md), not by the
+phone build process.
+
 ## Sources and clean checks
 
 Revisions/checksums are recorded in [sources.lock.json](../sources.lock.json).

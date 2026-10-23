@@ -25,6 +25,44 @@ This is actual Rust/Tk output under an isolated Xvfb display **on the reference
 Moto**. Account and connection events are synthetic; the image does not prove
 microphone recognition or cloud behavior.
 
+## First connection checklist
+
+If Linux and the companion components already work on your Moto, start here;
+you do not need to rebuild or reinstall the phone to configure an account.
+For a complete Portuguese walkthrough, see
+[Hermes no Moto: do setup à primeira conversa](hermes-quickstart.pt-BR.md).
+
+1. **Give your running Hermes the [server-agent instructions](hermes-server-agent.md).**
+   Use the copyable prompt there. Hermes checks its version and built-in APIs,
+   backs up its own profile configuration and prepares Edge TTS inside its own
+   runtime. Get the agreed profile and available pt-BR voice from its report.
+   No additional plugin is needed when the documented API contracts match.
+2. **On the Moto, configure your Groq key** under **Painel → Voz e áudio → Groq**.
+   This is the existing dictation key for this installation, not a shared key
+   from the developer or a key to put in the Hermes chat.
+3. **Open Painel → Hermes → ··· → Configurar.** Enter the HTTPS origin of your
+   existing Hermes app, Umbrel account ID and agreed profile. Normally leave
+   the auth-origin field blank; select a separately verified CA PEM only if
+   your server uses a private CA. Enable spoken replies. See
+   [field-by-field connection setup](#configure-your-own-connection).
+4. **Save and connect.** Enter your Umbrel password in the phone's masked
+   field. Without 2FA, that is all. If the account requires it, enter the code
+   when asked. Do not change account security or export browser cookies.
+5. **Say “Olá Hermes”, wait for acknowledgment, then ask a simple question.**
+   Check an audible answer and automatic listening afterward. Say **Nova
+   conversa** to verify a fresh context, then **Voltar ao terminal** to close.
+   Follow [the conversation walkthrough](#talk-and-return-to-the-terminal).
+
+The phone goes through **Umbrel's existing app gateway/login** to reach
+**Hermes's chat/audio APIs**. The companion uses a dedicated Moto conversation
+in the chosen profile; it does not attach to or reset Telegram. Wi-Fi/Tailscale
+provides reachability, while Umbrel provides authentication. This workflow
+never administers the Umbrel host.
+
+If the launcher reports a missing binary/model, continue with the requirements,
+build and userspace installation below. For a new phone, install/validate the
+base Linux port first. A source checkout is not a ready flashable image.
+
 ## Requirements
 
 **Server ownership:** never administer the Umbrel host for this feature.
@@ -168,13 +206,16 @@ tests do not substitute for these checks.
 
 ## Configure your own connection
 
-Open **Painel → Hermes → ··· → Configurar** (or hold the face). The app remains optional; the terminal
-works even before the Rust binary or server is configured.
+Open **Painel → Hermes → ··· → Configurar** (or hold the face). The app remains
+optional; the terminal works even before the Rust binary or server is configured.
 
 1. Copy your actual Hermes application URL from Umbrel. Use HTTPS and the
    correct application port; the internal Docker dashboard port is not proof
    of the public application URL. Examples use `server.example`, never an
    owner's address. Do not include a password, path, token or query string.
+   This client currently requires HTTPS. If your only existing app entry is
+   HTTP, report that compatibility blocker; do not open an internal port,
+   change the Umbrel gateway or disable TLS checks to work around it.
 2. Enter your Umbrel account ID (`0` for the owner account), and your Hermes
    profile if needed. Use an account that already has access to this app.
 3. Normally leave **Origem do login Umbrel** blank: umbrelOS 2.0's app-auth
@@ -247,7 +288,8 @@ can prevent those commands; ×/hardware screen controls remain available.
 The app retains its dedicated conversation between opens in the chosen profile.
 It does not attach to Telegram. **Nova conversa** intentionally replaces that
 current ID after server confirmation. Authentication persistence is a separate
-option: remembering a conversation does not save your password. Old replies
+option: remembering a conversation does not save your password. A fresh
+conversation clears chat context, not the profile's durable memory or tools. Old replies
 are restored silently after reconnect. Approvals and uncertain tasks use the
 existing Hermes UI/secondary recovery menu in this preview. Closing local UI
 cannot guarantee cancellation of already accepted tools on the server.
