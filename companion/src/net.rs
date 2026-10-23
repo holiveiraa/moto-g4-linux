@@ -405,14 +405,71 @@ pub fn receive(ws: &mut Socket) -> Result<Option<Message>> {
     }
 }
 pub fn call(ws: &mut Socket, method: &str, params: Value, alive: &AtomicBool) -> Result<Value> {
+    call_inner(ws, method, params, alive, None, None)
+}
+/// Select the announced contract before sending any mutating RPC. Never retry
+/// a rejected create/submit against a different contract.
+pub fn gateway(ws: &mut Socket, alive: &AtomicBool) -> Result<protocol::Gateway> {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while alive.load(Ordering::SeqCst) && Instant::now() < deadline {
+        if let Some(Message::Text(data)) = receive(ws)? {
+            for value in protocol::frames(&data)? {
+                if value["method"] == "event" && value["params"]["type"] == "gateway.ready" {
+                    return Ok(if value["params"]["payload"]["session_authority"] == true {
+                        protocol::Gateway::Canonical
+                    } else {
+                        protocol::Gateway::Legacy
+                    });
+                }
+            }
+        }
+    }
+    Err(Error(
+        "O Hermes não anunciou o protocolo de sessões. Nenhuma operação foi enviada.",
+    ))
+}
+pub fn call_diagnosed(
+    ws: &mut Socket,
+    method: &str,
+    params: Value,
+    alive: &AtomicBool,
+    directory: &Path,
+    gateway: protocol::Gateway,
+) -> Result<Value> {
+    call_inner(
+        ws,
+        method,
+        params,
+        alive,
+        Some(directory),
+        Some(gateway.canonical()),
+    )
+}
+fn call_inner(
+    ws: &mut Socket,
+    method: &str,
+    params: Value,
+    alive: &AtomicBool,
+    directory: Option<&Path>,
+    mut canonical: Option<bool>,
+) -> Result<Value> {
     let id = storage::id()?;
     send(ws, protocol::rpc(&id, method, params))?;
     let deadline = Instant::now() + Duration::from_secs(40);
     while Instant::now() < deadline && alive.load(Ordering::SeqCst) {
         if let Some(Message::Text(data)) = receive(ws)? {
             for value in protocol::frames(&data)? {
+                if value["method"] == "event" && value["params"]["type"] == "gateway.ready" {
+                    canonical = Some(value["params"]["payload"]["session_authority"] == true);
+                }
                 if value["id"] == id {
                     if value.get("error").is_some() {
+                        if let Some(directory) = directory {
+                            storage::save(
+                                &directory.join("hermes-diagnostic.json"),
+                                &protocol::rpc_diagnostic(method, canonical, &value["error"]),
+                            )?;
+                        }
                         return Err(Error(
                             "O Hermes recusou esta operação. Confira a versão e o perfil.",
                         ));

@@ -183,6 +183,9 @@ Moto-owned context; closing restores the terminal. No push-to-talk main flow.
 
 ## Hermes canonical API and HTTP through Tailscale — 23 October 2026
 
+This is the first correction checkpoint; the later dispatcher-selection section
+below supersedes its assumption about the actual dashboard entry.
+
 The server-side diagnosis exposed a gap in the original permissive fixtures:
 the native `/api/ws` authority uses **canonical** session contracts, while the
 earlier client sent fields from the standalone gateway. Creation now sends
@@ -229,6 +232,50 @@ in place. See [connection setup](hermes-setup.md#http-over-your-existing-tailsca
   The owner reports Edge TTS is already prepared in Hermes; this client agent
   did not install or change anything on that server.
 - Complete owner login and an audible Groq → Hermes → Edge turn remain pending.
+
+## Hermes gateway compatibility and RPC diagnostics — installed
+
+After successful Umbrel login, the owner reported a generic Hermes RPC refusal.
+Safe diagnostics identified **`session.create`, code `4000`, with
+`session_authority: false`** on the real app entry. That dashboard was serving
+the legacy contract, while earlier app-local inspection had found canonical
+contracts. The same Hermes version can expose both; version matching alone did
+not validate the actual client path. The follow-up records
+only the client method, numeric RPC code, optional `gateway.ready` canonical
+authority flag and allowlisted reason/field identifiers in a private 0600 file;
+the UI shows method/code. Raw server errors, credentials and conversation data
+are excluded. This distinguishes a live protocol/profile failure without
+guessing or trying alternate mutating requests.
+
+The source also omits `title` from creation. The canonical server resolves an
+existing title before considering `request_id`; a fixed title could therefore
+make **Nova conversa** return an old conversation. Strict fixtures now reject
+titled creation from this client.
+
+- **42 Rust tests**, Rustfmt/Clippy, **117 Python regressions** and a clean-source
+  ARM64 build pass on Linux/WSL. Privacy tests inject secret error text/details
+  and verify that neither the report nor UI includes them.
+- The client now waits for `gateway.ready`, selects canonical or legacy before
+  mutations, and uses that contract's create/resume, submit receipt, reply and
+  cancellation rules. It never retries a failed mutation with another adapter.
+  Legacy queue/steer/redirect receipts cannot prove a unique current execution;
+  they remain uncertain without replay or speaking a preceding completion.
+- The follow-up was installed with fresh verified rollback backups, independent
+  input checks, native runtime smoke, preserved personal configuration and tmux
+  `@0`. The final core is 3,523,160 bytes, SHA256
+  `57a0533842d359e39254510b0318e5cb0f0d1c485d496b26b78484a5c86239a6`.
+- **All 42 Rust tests**, **16 companion Python tests** and the isolated
+  fullscreen Tk/XTest review passed directly on the reference Moto. Both
+  canonical and legacy network fixtures run against the byte-identical core;
+  synthetic data and separate Xvfb/tmux servers preserve the owner's session.
+- During the update, one authorized targeted Windows PnP recovery returned
+  `3010` (restart required). SSH later became available; no automatic Windows
+  reboot or repeated device reset was performed. USB stability is not proven.
+- After the update, the phone's private state confirmed a real persistent
+  Moto-session identity and saved Umbrel app access, with no new RPC failure.
+  Protected login and session creation now work on the actual legacy entry.
+  No session IDs, cookies or endpoint addresses were published. Real prompt/
+  response and the complete spoken conversation still need owner acceptance.
 
 ## Distribution maturity
 

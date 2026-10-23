@@ -121,6 +121,27 @@ fn gateway_events_are_scoped_and_never_expose_reasoning_or_tool_payloads() {
 }
 
 #[test]
+fn rpc_diagnostic_retains_only_fixed_identifiers_and_numeric_code() {
+    let secret = "fixture-password-token-private-ip";
+    let error = json!({"code":4001,"message":secret,"data":{"reason":"invalid_params","field":"request_id","detail":secret,"params":{"password":secret}}});
+    let safe = protocol::rpc_diagnostic("session.create", Some(true), &error);
+    assert_eq!(
+        safe,
+        json!({"method":"session.create","session_authority":true,"code":4001,"reason":"invalid_params","field":"request_id"})
+    );
+    assert!(!safe.to_string().contains(secret));
+    let unsafe_fields = protocol::rpc_diagnostic(
+        secret,
+        None,
+        &json!({"code":secret,"data":{"reason":secret,"field":secret}}),
+    );
+    assert_eq!(
+        unsafe_fields,
+        json!({"method":null,"session_authority":null,"code":null,"reason":null,"field":null})
+    );
+}
+
+#[test]
 fn externally_cancelled_owned_queue_can_complete_without_an_execution_generation() {
     let mut reply = protocol::Reply::new("moto-runtime");
     reply.bind("owned", None);

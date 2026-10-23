@@ -126,9 +126,12 @@ Verify the installed version rather than blindly applying an upstream example.
 | --- | --- |
 | Protected application entry | Existing Umbrel app login remains in front of Hermes; password-only and challenged 2FA accounts both remain supported. |
 | `/api/ws` | Existing authenticated JSON-RPC: create/resume a dedicated conversation, submit a prompt and interrupt that runtime session. |
-| Canonical session parameters | Create: `source: gui`, `title`, stable `request_id`, optional `profile`. Resume: `session_id`, optional `profile`. Do not send legacy `idempotency_key`, `close_on_disconnect` or `inline_images`. |
-| Turn identity and cancellation | Submit uses a stable `submission_id`; correlate events by `params.admission_id` and `execution_generation`. Buffer early events until the receipt. Cancel a queued admission with `prompt.cancel`; if already started, interrupt its acknowledged generation. An external queued cancellation may complete without a generation; `voice_stopped: true` explicitly admits no turn. |
+| Dispatcher announcement | The actual dashboard `/api/ws` announces `event` / `gateway.ready`. `params.payload.session_authority: true` selects canonical; absent/false selects legacy. The client waits for this before mutations; a version label or another internal gateway does not establish the public path's contract. |
+| Canonical session parameters | Create: `source: gui`, stable `request_id`, optional `profile`; omit `title` because titled creation can resolve a previous conversation. Resume: `session_id`, optional `profile`. Do not send legacy `idempotency_key`, `close_on_disconnect` or `inline_images`. |
+| Legacy session parameters | Create: `source: desktop`, stable `idempotency_key`, `close_on_disconnect: false`, optional `profile`. Resume: `session_id`, `inline_images: false`, `close_on_disconnect: false`, optional `profile`. Never send canonical `request_id` to this dispatcher. |
+| Canonical turn identity | Submit uses a stable `submission_id`; correlate events by `params.admission_id` and `execution_generation`. Buffer early events until the receipt. Cancel a queued admission with `prompt.cancel`; if already started, interrupt its acknowledged generation. An external queued cancellation may complete without a generation; `voice_stopped: true` explicitly admits no turn. |
 | Canonical cancellation | Started turns use the acknowledged `execution_generation` with `session.interrupt`; queued turns use their own `admission_id` with `prompt.cancel` and wait for authoritative completion. |
+| Legacy turn/cancellation | Submit uses `text`, `voice_turn: true`, `queued: true`, the dedicated runtime `session_id` and optional profile. Only a `streaming` receipt starts reply collection. Ambiguous queue/steer/redirect receipts remain uncertain without replay. Interrupt targets only that runtime ID, with no canonical generation field; wait for completion. |
 | Chat events | `method: event`, `params.type: message.complete`, matching runtime `session_id`, final text in `params.payload.text`. |
 | `/api/audio/voice-config` | Authenticated, profile-scoped response with `ok: true`, `tts.mode: relay`, `tts.reason: provider 'edge' has no client wire` for v0.22.4. |
 | `/api/audio/speak-stream` | Existing authenticated WS accepts text and returns JSON start/end metadata plus mono S16_LE PCM. |
@@ -170,10 +173,14 @@ the Umbrel Tailscale IP on the phone. No host HTTPS/Serve/Funnel/proxy setup or
 port changes are needed. Never replace this with public/LAN HTTP or remove
 Umbrel authentication. App-local Edge success is still distinct from a phone test.
 
-The dashboard sidecar uses the pinned
+Hermes includes the pinned
 [canonical session contracts](https://github.com/NousResearch/hermes-agent/blob/4d04303818b61bf3aa09278af48356315515965b/tui_gateway/contracts/canonical_sessions.py),
 which differ from the legacy standalone `contracts/sessions.py` even at the
 same commit. Validate the actual transport, not only the Hermes version label.
+The [legacy session](https://github.com/NousResearch/hermes-agent/blob/4d04303818b61bf3aa09278af48356315515965b/tui_gateway/contracts/sessions.py)
+and [prompt](https://github.com/NousResearch/hermes-agent/blob/4d04303818b61bf3aa09278af48356315515965b/tui_gateway/contracts/prompt_voice.py)
+contracts are also supported. Selection follows the authenticated announcement;
+there is no retry-after-error fallback. No Umbrel host/gateway change is needed.
 
 Return a short report: installed Hermes version, agreed profile, confirmed Edge
 voice, which app-local checks passed, backup/rollback location, any app-runtime

@@ -224,7 +224,12 @@ class HermesPanel:
                 return
             self.pending = bool(value.get('pending', self.pending))
             self.transcribing = self.switching = False
-            self.set_status(value.get('text', 'Não foi possível concluir.'), 'error')
+            text = value.get('text', 'Não foi possível concluir.')
+            diagnostic = value.get('rpc') or {}
+            if (diagnostic.get('method') in ('session.create', 'session.resume')
+                    and type(diagnostic.get('code')) is int):
+                text += f" [{diagnostic['method']}, código {diagnostic['code']}]"
+            self.set_status(text, 'error')
             if value.get('login') or value.get('totp'):
                 self.connected = False
                 self.login(two_factor=bool(value.get('totp')))

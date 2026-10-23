@@ -273,17 +273,39 @@ fn serve(
             return;
         }
         let mut active = String::from("runtime-moto");
+        let legacy = matches!(queued.load(Ordering::SeqCst), 7 | 8);
+        let _ = ws.send(Message::Text(json!({"method":"event","params":{"type":"gateway.ready","payload":if legacy {json!({})} else {json!({"session_authority":true})}}}).to_string().into()));
         while let Ok(Message::Text(data)) = ws.read() {
             let value: Value = serde_json::from_str(&data).unwrap();
             // Pinned tui_gateway/contracts/canonical_sessions.py, v0.22.4.
             // The legacy standalone sessions.py has different fields.
-            let allowed: &[&str] = match value["method"].as_str().unwrap_or("") {
-                "session.create" => &["source", "title", "request_id", "profile"],
-                "session.resume" => &["session_id", "profile"],
-                "prompt.submit" => &["session_id", "text", "voice_turn", "submission_id"],
-                "session.interrupt" => &["session_id", "execution_generation"],
-                "prompt.cancel" => &["session_id", "admission_id"],
-                _ => &[],
+            let allowed: &[&str] = if legacy {
+                match value["method"].as_str().unwrap_or("") {
+                    "session.create" => &[
+                        "source",
+                        "idempotency_key",
+                        "close_on_disconnect",
+                        "profile",
+                    ],
+                    "session.resume" => &[
+                        "session_id",
+                        "inline_images",
+                        "close_on_disconnect",
+                        "profile",
+                    ],
+                    "prompt.submit" => &["session_id", "text", "voice_turn", "queued", "profile"],
+                    "session.interrupt" => &["session_id", "profile"],
+                    _ => &[],
+                }
+            } else {
+                match value["method"].as_str().unwrap_or("") {
+                    "session.create" => &["source", "title", "request_id", "profile"],
+                    "session.resume" => &["session_id", "profile"],
+                    "prompt.submit" => &["session_id", "text", "voice_turn", "submission_id"],
+                    "session.interrupt" => &["session_id", "execution_generation"],
+                    "prompt.cancel" => &["session_id", "admission_id"],
+                    _ => &[],
+                }
             };
             let invalid = value["params"]
                 .as_object()
@@ -291,18 +313,22 @@ fn serve(
                 .keys()
                 .any(|key| !allowed.contains(&key.as_str()))
                 || (value["method"] == "session.create"
-                    && (value["params"]["source"] != "gui"
-                        || value["params"]["request_id"]
+                    && (value["params"]["source"] != if legacy {"desktop"} else {"gui"}
+                        || value["params"][if legacy {"idempotency_key"} else {"request_id"}]
                             .as_str()
                             .is_none_or(str::is_empty)))
+                // Canonical titled create resolves an existing title before
+                // request_id. Untitled creation must preserve fresh-chat intent.
+                || (value["method"] == "session.create" && value["params"].get("title").is_some())
                 || (value["method"] == "session.interrupt"
+                    && !legacy
                     && value["params"]["execution_generation"] != 1);
             if invalid {
-                let _ = ws.send(Message::Text(json!({"jsonrpc":"2.0","id":value["id"],"error":{"code":4001,"message":"invalid_params"}}).to_string().into()));
+                let _ = ws.send(Message::Text(json!({"jsonrpc":"2.0","id":value["id"],"error":{"code":if legacy {4000} else {4001},"message":"invalid_params"}}).to_string().into()));
                 continue;
             }
             if value["method"] == "session.create" && fail_create.load(Ordering::SeqCst) {
-                let _ = ws.send(Message::Text(json!({"jsonrpc":"2.0","id":value["id"],"error":{"code":-32000,"message":"fixture create rejected"}}).to_string().into()));
+                let _ = ws.send(Message::Text(json!({"jsonrpc":"2.0","id":value["id"],"error":{"code":-32000,"message":"fixture-secret-create-rejected","data":{"detail":"fixture-secret-detail"}}}).to_string().into()));
                 continue;
             }
             let result = match value["method"].as_str().unwrap_or("") {
@@ -325,7 +351,10 @@ fn serve(
                 "prompt.submit" => {
                     assert_eq!(value["params"]["session_id"], active);
                     count.fetch_add(1, Ordering::SeqCst);
-                    if queued.load(Ordering::SeqCst) == 5 {
+                    if legacy {
+                        assert_eq!(value["params"]["queued"], true);
+                        json!({"status":if queued.load(Ordering::SeqCst) == 8 {"queued"} else {"streaming"},"user_row_id":1})
+                    } else if queued.load(Ordering::SeqCst) == 5 {
                         json!({"voice_stopped":true})
                     } else if matches!(queued.load(Ordering::SeqCst), 1 | 2 | 4) {
                         json!({"status":"queued","execution_generation":null,"admission_id":"fixture-admission"})
@@ -386,7 +415,7 @@ fn serve(
                     let _ = ws.close(None);
                     return;
                 }
-                if wait_cancel || queued.load(Ordering::SeqCst) != 0 {
+                if wait_cancel || matches!(queued.load(Ordering::SeqCst), 1 | 2 | 4 | 8) {
                     continue;
                 }
                 for (session, kind, text) in [
@@ -398,10 +427,32 @@ fn serve(
                         "Olá, resposta do fixture.",
                     ),
                 ] {
-                    if ws.send(Message::Text(json!({"jsonrpc":"2.0","method":"event","params":{"session_id":session,"admission_id":"fixture-admission","execution_generation":1,"type":kind,"payload":{"text":text}}}).to_string().into())).is_err() { return; }
+                    let mut params =
+                        json!({"session_id":session,"type":kind,"payload":{"text":text}});
+                    if !legacy {
+                        params["admission_id"] = json!("fixture-admission");
+                        params["execution_generation"] = json!(1);
+                    }
+                    if ws
+                        .send(Message::Text(
+                            json!({"jsonrpc":"2.0","method":"event","params":params})
+                                .to_string()
+                                .into(),
+                        ))
+                        .is_err()
+                    {
+                        return;
+                    }
                 }
             } else if value["method"] == "session.interrupt" {
-                let _ = ws.send(Message::Text(json!({"method":"event","params":{"session_id":active,"admission_id":"fixture-admission","execution_generation":1,"type":"message.complete","payload":{"text":"Interrompido."}}}).to_string().into()));
+                let mut params = json!({"session_id":active,"type":"message.complete","payload":{"text":"Interrompido."}});
+                if !legacy {
+                    params["admission_id"] = json!("fixture-admission");
+                    params["execution_generation"] = json!(1);
+                }
+                let _ = ws.send(Message::Text(
+                    json!({"method":"event","params":params}).to_string().into(),
+                ));
             }
         }
         return;
@@ -513,7 +564,7 @@ fn login_2fa_handoff_cookie_and_authenticated_websocket() {
         net::call(
             &mut ws,
             "session.create",
-            json!({"source":"gui","request_id":"fixture-create","title":"Moto fixture"}),
+            json!({"source":"gui","request_id":"fixture-create"}),
             &alive
         )
         .unwrap()["stored_session_id"],
@@ -639,6 +690,76 @@ fn queued_turn_cancellation_uses_owned_admission_and_requires_terminal_receipt()
     app.send(json!({"cmd":"send","text":"fresh request after confirmed cancellation"}));
     app.event("reply");
     assert_eq!(fixture.submits.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn refused_create_reports_private_safe_diagnostics_without_server_detail() {
+    let fixture = Fixture::new(false, false);
+    fixture.fail_create.store(true, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.event("ready");
+    app.send(json!({"cmd":"login","password":"fixture-password","totp":"123456"}));
+    let failure = app.event("error");
+    assert_eq!(failure["rpc"]["method"], "session.create");
+    assert_eq!(failure["rpc"]["code"], -32000);
+    assert_eq!(failure["rpc"]["session_authority"], true);
+    assert!(!failure.to_string().contains("fixture-secret"));
+    let path = fixture.root.join("hermes-diagnostic.json");
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+    assert!(!fs::read_to_string(path).unwrap().contains("fixture-secret"));
+}
+
+#[test]
+fn announced_legacy_gateway_uses_its_contract_and_keeps_new_chats_distinct() {
+    let fixture = Fixture::new(false, false);
+    fixture.queued.store(7, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"legacy owned question"}));
+    assert_eq!(app.event("reply")["text"], "Olá, resposta do fixture.");
+    app.send(json!({"cmd":"new_session"}));
+    app.event("new_session");
+    assert_eq!(
+        storage::load(&fixture.root.join("hermes-task.json")).unwrap()["stored_session_id"],
+        "stored-moto-2"
+    );
+    app.send(json!({"cmd":"send","text":"new legacy topic"}));
+    app.event("reply");
+    assert_eq!(fixture.creates.load(Ordering::SeqCst), 2);
+    assert_eq!(fixture.submits.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn legacy_cancellation_is_scoped_to_the_owned_runtime_and_waits_for_completion() {
+    let fixture = Fixture::new(false, true);
+    fixture.queued.store(7, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"cancel legacy turn"}));
+    for _ in 0..100 {
+        if fixture.submits.load(Ordering::SeqCst) > 0 {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    app.send(json!({"cmd":"cancel"}));
+    assert_eq!(app.event("reply")["cancelled"], true);
+}
+
+#[test]
+fn ambiguous_legacy_queue_receipt_stays_unknown_without_replaying() {
+    let fixture = Fixture::new(false, false);
+    fixture.queued.store(8, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"legacy queue race"}));
+    assert_eq!(app.event("error")["pending"], true);
+    app.send(json!({"cmd":"send","text":"do not replay"}));
+    assert_eq!(app.event("error")["pending"], true);
+    assert_eq!(fixture.submits.load(Ordering::SeqCst), 1);
 }
 
 #[test]

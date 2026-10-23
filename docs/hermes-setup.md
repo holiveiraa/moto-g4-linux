@@ -8,22 +8,23 @@ The main screen has a face and short state captions, with a discreet options
 menu. Rust owns hearing/network/speech/animation; Tk hosts the native canvas and
 setup/password fields.
 
-**Status: experimental app installed on the reference Moto.** All **37 Rust
-fixtures**, **15 companion Python regressions** and the fullscreen Tk/XTest/tmux
-review passed directly on that Moto, in addition to host checks. The latest
-three-file compatibility update was installed transactionally and independently
+**Status: experimental app installed on the reference Moto.** All **42 Rust
+fixtures**, **16 companion Python regressions** and the fullscreen Tk/XTest/tmux
+review passed directly on that Moto, in addition to host checks. The userspace
+compatibility updates were installed transactionally and independently
 checked by hash/size/mode. Runtime smoke passed, personal configuration was
 preserved and tmux `@0` survived the GUI restart. A credential-free probe through
 the Moto's existing Tailscale reached Umbrel's real app-login boundary over HTTP.
 Synthetic local recognition took 1.326–1.906 seconds per sample, with roughly
-78 MB resident memory. Actual-owner wake accuracy, heat/battery, server login
-and live Groq/Edge remain open gates. Owner login on the phone is still required.
+78 MB resident memory. Actual-owner wake accuracy, heat/battery and live
+Groq/Edge remain open gates. Real Umbrel login and Moto-session creation are
+confirmed on the reference installation.
 See [status](status.md) and [research/design](hermes-assistant.md).
 There is no universal installer.
 
-**23 October compatibility correction:** the current source fixes the canonical
-Hermes `/api/ws` session contract and adds verified HTTP-over-Tailscale support.
-It passes **37 host Rust tests** and **116 Python regressions**. The reference
+**23 October compatibility correction:** the current source selects the announced
+canonical or legacy Hermes `/api/ws` contract and supports verified HTTP over Tailscale.
+It passes **42 host Rust tests** and **117 Python regressions**. The reference
 Moto has this update. Other older installations need matching userspace files
 before an HTTP Tailscale URL works; a complete live voice turn remains pending.
 
@@ -67,6 +68,23 @@ The phone goes through **Umbrel's existing app gateway/login** to reach
 in the chosen profile; it does not attach to or reset Telegram. Wi-Fi/Tailscale
 provides reachability, while Umbrel provides authentication. This workflow
 never administers the Umbrel host.
+
+### If Hermes refuses an operation after login
+
+The current source appends the fixed RPC method and numeric error code to that
+message. Its private `hermes-diagnostic.json`, beside `hermes.json`, keeps only
+those identifiers, the optional canonical-authority flag and explicitly allowed
+reason/field names. It never stores the raw error message/detail, URL, profile,
+parameters, result, credentials or transcript. The file has mode 0600. Do not
+publish the surrounding private configuration directory.
+
+Give the method/code to the agent investigating compatibility. A blank profile
+uses the default authority; changing it at random is not a diagnosis. Confirm
+the actual dashboard's `gateway.ready` authority flag using the
+[server contract guide](hermes-server-agent.md#contracts-the-moto-expects).
+The client waits for that announcement and selects the matching canonical or
+legacy contract before creating a session. Both can exist in one Hermes version.
+See [current acceptance](status.md#hermes-gateway-compatibility-and-rpc-diagnostics--installed).
 
 If the launcher reports a missing binary/model, continue with the requirements,
 build and userspace installation below. For a new phone, install/validate the

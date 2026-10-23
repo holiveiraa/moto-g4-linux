@@ -216,6 +216,13 @@ class CompanionFiles(unittest.TestCase):
         self.assertIsNone(app.listener)
         self.assertIsNone(app.worker)
 
+    def test_rpc_failure_shows_only_method_and_numeric_code(self):
+        app = self.app()
+        app.event({'event':'error','operation':'connect','text':'Operação recusada.',
+                   'rpc':{'method':'session.create','code':4001,'detail':'fixture-private-secret'}})
+        self.assertEqual(app.notice, 'Operação recusada. [session.create, código 4001]')
+        self.assertNotIn('fixture-private-secret', app.notice)
+
     def test_killed_listener_cleanup_is_private_and_scoped_to_its_pid(self):
         h = module('moto-hermes')
         with tempfile.TemporaryDirectory() as directory:

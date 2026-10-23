@@ -81,15 +81,15 @@ struct Runtime {
     speech_signal: Arc<AtomicU8>,
 }
 impl Runtime {
-    fn snapshot(&self, ws: &mut net::Socket) -> Result<Value> {
+    fn snapshot(&self, ws: &mut net::Socket, gateway: protocol::Gateway) -> Result<Value> {
         let model = self
             .model
             .lock()
             .map_err(|_| Error("Estado indisponível."))?;
         let mut params = if model.stored.is_empty() {
-            json!({"source":"gui","title":"Moto voice companion","request_id":model.create_key})
+            gateway.create(&model.create_key)
         } else {
-            json!({"session_id":model.stored})
+            gateway.resume(&model.stored)
         };
         let method = if model.stored.is_empty() {
             "session.create"
@@ -100,7 +100,14 @@ impl Runtime {
             params["profile"] = json!(self.backend.config.profile);
         }
         drop(model);
-        let result = net::call(ws, method, params, &self.alive)?;
+        let result = net::call_diagnosed(
+            ws,
+            method,
+            params,
+            &self.alive,
+            &self.backend.directory,
+            gateway,
+        )?;
         let id = result["session_id"]
             .as_str()
             .filter(|s| !s.is_empty() && s.len() < 256)
@@ -132,6 +139,10 @@ impl Runtime {
         Ok(result)
     }
     fn connect(&self, credentials: Option<(&str, &str)>) -> Result<Value> {
+        storage::save(
+            &self.backend.directory.join("hermes-diagnostic.json"),
+            &Value::Null,
+        )?;
         let token = match credentials {
             Some((password, totp)) => self.backend.login(password, totp, &self.alive)?,
             None => self.backend.discover()?,
@@ -140,7 +151,8 @@ impl Runtime {
             return Err(Error("Operação cancelada."));
         }
         let mut ws = self.backend.socket("/api/ws", &token)?;
-        let result = self.snapshot(&mut ws)?;
+        let gateway = net::gateway(&mut ws, &self.alive)?;
+        let result = self.snapshot(&mut ws, gateway)?;
         if !self.alive.load(Ordering::SeqCst) {
             return Err(Error("Operação cancelada."));
         }
@@ -181,18 +193,30 @@ impl Runtime {
         if self.speech_busy.load(Ordering::SeqCst) {
             return Err(Error("Aguarde a voz parar antes de abrir outra conversa."));
         }
+        storage::save(
+            &self.backend.directory.join("hermes-diagnostic.json"),
+            &Value::Null,
+        )?;
         let token = self.token()?;
         let mut ws = self.backend.socket("/api/ws", &token)?;
-        let previous = self.snapshot(&mut ws)?;
+        let gateway = net::gateway(&mut ws, &self.alive)?;
+        let previous = self.snapshot(&mut ws, gateway)?;
         if previous["running"] == true {
             return Err(net::UNKNOWN);
         }
         let key = storage::id()?;
-        let mut params = json!({"source":"gui","title":"Moto voice companion","request_id":key});
+        let mut params = gateway.create(&key);
         if !self.backend.config.profile.is_empty() {
             params["profile"] = json!(self.backend.config.profile);
         }
-        let result = net::call(&mut ws, "session.create", params, &self.alive)?;
+        let result = net::call_diagnosed(
+            &mut ws,
+            "session.create",
+            params,
+            &self.alive,
+            &self.backend.directory,
+            gateway,
+        )?;
         let stored = result["stored_session_id"]
             .as_str()
             .filter(|s| !s.is_empty() && s.len() < 256)
@@ -243,7 +267,8 @@ impl Runtime {
             return Err(net::UNKNOWN);
         }
         let mut ws = self.backend.socket("/api/ws", &token)?;
-        let snapshot = self.snapshot(&mut ws)?;
+        let gateway = net::gateway(&mut ws, &self.alive)?;
+        let snapshot = self.snapshot(&mut ws, gateway)?;
         let sid = snapshot["session_id"]
             .as_str()
             .ok_or(Error("Sessão inválida."))?;
@@ -263,29 +288,42 @@ impl Runtime {
         if !self.alive.load(Ordering::SeqCst) {
             return Err(net::UNKNOWN);
         }
+        let mut submission = gateway.submit(sid, text, &request);
+        if !gateway.canonical() && !self.backend.config.profile.is_empty() {
+            submission["profile"] = json!(self.backend.config.profile);
+        }
         net::send(
             &mut ws,
-            protocol::rpc(
-                &request,
-                "prompt.submit",
-                json!({"session_id":sid,"text":text,"voice_turn":true,"submission_id":request}),
-            ),
+            protocol::rpc(&request, "prompt.submit", submission),
         )?;
-        let mut reply = protocol::Reply::new(sid);
+        let mut reply = if gateway.canonical() {
+            protocol::Reply::new(sid)
+        } else {
+            protocol::Reply::legacy(sid)
+        };
         let deadline = Instant::now() + Duration::from_secs(600);
         let mut stop_sent = false;
         let mut cancel_sent = false;
         let mut interrupt_sent = false;
         let mut execution_generation = None;
         let mut admission_id = None;
+        let mut accepted = false;
         let mut early_events = Vec::new();
         let mut early_bytes = 0;
         while self.alive.load(Ordering::SeqCst) && Instant::now() < deadline {
             if self.turn_signal.load(Ordering::SeqCst) == 1
-                && ((execution_generation.is_some() && !interrupt_sent)
+                && ((!gateway.canonical() && accepted && !interrupt_sent)
+                    || (execution_generation.is_some() && !interrupt_sent)
                     || (execution_generation.is_none() && admission_id.is_some() && !cancel_sent))
             {
-                let (method, params) = if let Some(generation) = execution_generation {
+                let (method, params) = if !gateway.canonical() {
+                    interrupt_sent = true;
+                    let mut params = json!({"session_id":sid});
+                    if !self.backend.config.profile.is_empty() {
+                        params["profile"] = json!(self.backend.config.profile);
+                    }
+                    ("session.interrupt", params)
+                } else if let Some(generation) = execution_generation {
                     interrupt_sent = true;
                     (
                         "session.interrupt",
@@ -336,8 +374,15 @@ impl Runtime {
                             .as_str()
                             .filter(|s| !s.is_empty() && s.len() <= 256)
                             .map(str::to_owned);
-                        let admission = admission_id.as_deref().ok_or(net::UNKNOWN)?;
-                        reply.bind(admission, execution_generation);
+                        if gateway.canonical() {
+                            let admission = admission_id.as_deref().ok_or(net::UNKNOWN)?;
+                            reply.bind(admission, execution_generation);
+                        } else if value["result"]["status"] != "streaming" {
+                            // Legacy queued/steered replies do not identify a
+                            // unique execution. Never speak a preceding result.
+                            return Err(net::UNKNOWN);
+                        }
+                        accepted = true;
                         for event in early_events.drain(..).rev() {
                             frames.push_front(event);
                         }
@@ -346,7 +391,7 @@ impl Runtime {
                     }
                     if value["method"] == "event"
                         && value["params"]["session_id"] == sid
-                        && admission_id.is_none()
+                        && !accepted
                         && matches!(
                             value["params"]["type"].as_str(),
                             Some("message.start" | "message.complete")
@@ -445,7 +490,7 @@ impl Runtime {
             if runtime.alive.load(Ordering::SeqCst) {
                 match result {
                     Ok(value) => runtime.output.event(value),
-                    Err(error) => runtime.output.event(json!({"event":"error","operation":kind,"epoch":command["epoch"],"text":error.0,"login":error==net::LOGIN,"totp":error==net::TOTP,"pending":runtime.model.lock().is_ok_and(|m|m.turn.busy())})),
+                    Err(error) => runtime.output.event(json!({"event":"error","operation":kind,"epoch":command["epoch"],"text":error.0,"login":error==net::LOGIN,"totp":error==net::TOTP,"pending":runtime.model.lock().is_ok_and(|m|m.turn.busy()),"rpc":if matches!(kind,"connect"|"login"|"new_session") { storage::load(&runtime.backend.directory.join("hermes-diagnostic.json")).unwrap_or(Value::Null) } else { Value::Null }})),
                 }
             }
         })

@@ -121,6 +121,10 @@ Rust gateway fixtures enforce the **canonical** v0.22.4 session field set:
 owned queued-admission cancellation. They reject unknown fields with `4001`
 instead of accepting a fabricated legacy request. See the pinned
 [canonical contracts](https://github.com/NousResearch/hermes-agent/blob/4d04303818b61bf3aa09278af48356315515965b/tui_gateway/contracts/canonical_sessions.py).
+Separate legacy fixtures omit the authority flag and reject canonical fields
+with `4000`. They exercise its creation/resume, streaming replies, fresh context,
+runtime-scoped interruption and ambiguous queue handling. Mode selection happens
+before mutation; an error never triggers a retry with another contract.
 
 ## Physical acceptance
 

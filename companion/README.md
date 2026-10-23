@@ -25,9 +25,12 @@ daemon's root-owned Unix socket proves the peer membership. No host HTTPS
 proxy is required for an HTTP-only Umbrel. See
 [transport setup](../docs/hermes-setup.md#http-over-your-existing-tailscale).
 
-The dashboard uses the canonical session contract, not the legacy standalone
-dispatcher: `source: gui`, `request_id`, minimal resume, and generation/admission
-scoped cancellation. Strict fixtures exercise those fields.
+The authenticated dashboard announces its session contract in `gateway.ready`.
+The client selects canonical (`session_authority: true`) or legacy (flag absent/
+false) before sending operations. Canonical uses `request_id` and scoped
+admission/generation receipts; legacy uses `idempotency_key`, `streaming` receipts
+and its dedicated runtime ID. It never retries a rejected mutation with another
+contract. Strict fixtures exercise both. See [server contracts](../docs/hermes-server-agent.md#contracts-the-moto-expects).
 
 Build on a Linux filesystem with the versions in
 [toolchains.json](toolchains.json), then run:

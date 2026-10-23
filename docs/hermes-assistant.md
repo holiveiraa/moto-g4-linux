@@ -417,6 +417,19 @@ frontend was installed with verified rollback and the existing tmux window
 preserved. Physical conversation, the installed server image/auth flow, the
 owner's endpoint/CA, live Groq/Edge and fresh-install acceptance remain open.
 
+## Live API compatibility correction — 23 October 2026
+
+The actual authenticated dashboard advertised no canonical authority and refused
+`session.create` with code `4000`; it exposed the legacy contract even though
+app-local inspection had found the canonical contract in the same version.
+The client now waits for `gateway.ready` and selects the corresponding adapter
+before sending mutations. Both contracts have strict fixtures; no failed prompt
+is retried against a different API. Canonical creation omits the title because
+the authority resolves existing titles before considering the idempotency key.
+Protected login/session creation is now confirmed on the reference phone.
+See [current contracts](hermes-server-agent.md#contracts-the-moto-expects) and
+[acceptance evidence](status.md#hermes-gateway-compatibility-and-rpc-diagnostics--installed).
+
 ## Fullscreen revision checkpoint
 
 The earlier panel prototype was rejected during owner review. Its installed
