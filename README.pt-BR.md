@@ -43,6 +43,8 @@ em Linux a partir do fonte atual. Não representam uma conversa real já validad
   ou **“Fechar aplicativo”** fecha o app e libera o áudio. O × também fecha.
 - **Login Umbrel preservado**: só senha se você não usa 2FA; código apenas se
   sua conta exigir. Wi-Fi ou Tailscale fornece a rota que você já utiliza.
+- **Umbrel sem HTTPS**: use HTTP pelo IP Tailscale e pela porta existente do
+  app. O cliente verifica a VPN e restringe HTTP/WS a ela, sem mudar o servidor.
 
 **Estado experimental:** instalado no Moto de referência, com testes Rust/Tk e
 protocolos passando no aparelho. Precisão da ativação com sua voz, ruído,
@@ -54,8 +56,9 @@ física. [Resultados e limites](docs/status.md).
 1. **No Hermes servidor:** envie o texto abaixo. O próprio Hermes confere sua
    versão, faz backup e prepara o perfil/Edge TTS dentro do próprio app.
 2. **No Moto:** com os componentes instalados, abra
-   **Painel → Hermes → ··· → Configurar**, informe a URL HTTPS do app, conta e
-   perfil. Configure sua chave Groq em **Voz e áudio → Groq** e faça login.
+   **Painel → Hermes → ··· → Configurar**, informe a origem do app (HTTPS ou
+   HTTP pelo IP Tailscale), conta e perfil. Configure sua chave Groq em
+   **Voz e áudio → Groq** e faça login.
 3. **Teste:** diga “Olá Hermes”, espere a confirmação e faça uma pergunta
    simples. Confira a resposta falada, a escuta automática e “Nova conversa”.
 

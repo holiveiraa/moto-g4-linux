@@ -19,6 +19,12 @@ and live Groq/Edge remain open gates. This phone still needs its first connectio
 setup. See [status](status.md) and [research/design](hermes-assistant.md).
 There is no universal installer.
 
+**23 October compatibility correction:** the current source fixes the canonical
+Hermes `/api/ws` session contract and adds verified HTTP-over-Tailscale support.
+It passes **37 host Rust tests** and **116 Python regressions**. The older
+reference installation described above needs this userspace update before an
+HTTP Tailscale URL works; current-build native/live acceptance is pending.
+
 ![Fullscreen companion rendered with synthetic services](assets/hermes.png)
 
 This is actual Rust/Tk output under an isolated Xvfb display **on the reference
@@ -40,8 +46,9 @@ For a complete Portuguese walkthrough, see
 2. **On the Moto, configure your Groq key** under **Painel → Voz e áudio → Groq**.
    This is the existing dictation key for this installation, not a shared key
    from the developer or a key to put in the Hermes chat.
-3. **Open Painel → Hermes → ··· → Configurar.** Enter the HTTPS origin of your
-   existing Hermes app, Umbrel account ID and agreed profile. Normally leave
+3. **Open Painel → Hermes → ··· → Configurar.** Enter the origin of your
+   existing Hermes app: HTTPS, or HTTP using its numeric Tailscale IP with the
+   Moto's existing VPN connected. Enter the Umbrel account ID and agreed profile. Normally leave
    the auth-origin field blank; select a separately verified CA PEM only if
    your server uses a private CA. Enable spoken replies. See
    [field-by-field connection setup](#configure-your-own-connection).
@@ -79,6 +86,10 @@ workflow, including for diagnostics.
 - Your own running Hermes Agent and Umbrel account. The implemented protocol
   targets **Hermes v0.22.4 and umbrelOS 2.0**; older/newer releases need their
   contracts checked. No second agent, Telegram bot or Tailscale account is needed.
+- For an HTTP-only Umbrel, use the existing Tailscale installation on the Moto
+  and the server's numeric Tailscale IP. The standard `tailscale0` interface and
+  root-owned `/run/tailscale/tailscaled.sock` LocalAPI are required. No Umbrel
+  HTTPS proxy, Serve/Funnel, port exposure or host configuration is needed.
 - A Groq account/key, configured privately through **Voz e áudio → Groq** on
   this installation. The app reuses that installation's `groq.json` schema.
 - Hermes's selected profile configured for **Edge TTS**, with its supported
@@ -209,18 +220,21 @@ tests do not substitute for these checks.
 Open **Painel → Hermes → ··· → Configurar** (or hold the face). The app remains
 optional; the terminal works even before the Rust binary or server is configured.
 
-1. Copy your actual Hermes application URL from Umbrel. Use HTTPS and the
-   correct application port; the internal Docker dashboard port is not proof
+1. Copy your actual Hermes application URL from Umbrel. Use its existing
+   HTTPS origin, or HTTP with its numeric Tailscale IP and correct app port;
+   the internal Docker dashboard port is not proof
    of the public application URL. Examples use `server.example`, never an
    owner's address. Do not include a password, path, token or query string.
-   This client currently requires HTTPS. If your only existing app entry is
-   HTTP, report that compatibility blocker; do not open an internal port,
-   change the Umbrel gateway or disable TLS checks to work around it.
+   For example, `http://100.64.0.10:18790` is a synthetic Tailscale example.
+   Convert a browser URL such as `/chat?profile=default` by removing the path/
+   query and putting `default` in the separate profile field. Ordinary LAN or
+   public HTTP and HTTP DNS names are refused; the app verifies the encrypted
+   route before using HTTP, rather than merely trusting a `100.x` prefix.
 2. Enter your Umbrel account ID (`0` for the owner account), and your Hermes
    profile if needed. Use an account that already has access to this app.
 3. Normally leave **Origem do login Umbrel** blank: umbrelOS 2.0's app-auth
    service uses the same hostname on port 2000. If your verified deployment
-   exposes a different auth origin, enter that exact HTTPS origin explicitly.
+   exposes a different auth origin, enter that exact permitted origin explicitly.
    The app refuses a login redirect to any other origin/port.
 4. If Umbrel uses a private CA, obtain and independently verify its CA
    certificate, store its PEM on this installation and select its path. System
@@ -234,6 +248,30 @@ The [example JSON](../companion/hermes.example.json) documents the schema for
 agent-assisted setup. The GUI saves `/root/.config/moto-linux/hermes.json`
 atomically with file mode 0600 and parent mode 0700. The example is not an
 installation input containing another owner's credentials.
+
+### HTTP over your existing Tailscale
+
+Keep Tailscale connected on the Moto and use the **server's numeric Tailscale
+IP**, with the app's existing port. The same address works at home or through
+another phone's Wi-Fi hotspot when both nodes have internet and tailnet access.
+Do not use `umbrel.local` remotely; this HTTP mode deliberately accepts numeric
+peer IPs rather than DNS names. HTTPS hostnames keep their normal certificate
+verification and can use Wi-Fi or Tailscale.
+
+The Rust client checks the local root-owned Tailscale daemon and its peer
+credentials, then requires `Running`, TUN mode and the destination in an online
+peer's actual `TailscaleIPs`. It binds HTTP **and WS** sockets to `tailscale0`
+before connecting. Login and handoff are checked separately before any request;
+redirect origins remain exact. There is no proxy or LAN-route fallback when
+the VPN/interface is missing. The existing plaintext HTTP inside the VPN is
+protected by Tailscale, not by TLS. Merely being in the CGNAT IP range is
+insufficient. Userspace-only Tailscale and subnet-routed LAN HTTP are not supported.
+
+Normally leave the auth-origin field empty: the same scheme/IP on port 2000
+is used. If the gateway returns a different origin, inspect the actual app
+login contract and configure only a separately verified permitted origin.
+Do not remove Umbrel login or change the host. No CA PEM is needed for HTTP;
+HTTPS still enforces CA/hostname checks, including WSS.
 
 ### Password-only and optional two-factor login
 

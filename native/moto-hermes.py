@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Private configuration and process boundary for the optional Rust companion."""
 import json
+import ipaddress
 import os
 import stat
 from pathlib import Path
@@ -11,7 +12,7 @@ from urllib.parse import urlsplit
 
 CONFIG = Path('/root/.config/moto-linux/hermes.json')
 BINARY = '/usr/local/bin/moto-hermes'
-DEFAULTS = {'server_url':'https://server.example:18789/', 'user_id':'0', 'profile':'',
+DEFAULTS = {'server_url':'https://server.example:18790/', 'user_id':'0', 'profile':'',
             'auth_origin':None, 'ca_file':None, 'auto_speak':True, 'remember_session':False}
 
 
@@ -46,15 +47,22 @@ def save_config(value, path=None):
         parsed.port
     except ValueError:
         raise ValueError('Porta do Hermes inválida.') from None
-    loopback = parsed.hostname in ('127.0.0.1', 'localhost', '::1')
-    if (parsed.scheme != 'https' and not (parsed.scheme == 'http' and loopback)
+    def permitted_http(host):
+        try:
+            address = ipaddress.ip_address(host)
+            return (str(address) in ('127.0.0.1','::1') or
+                    address in ipaddress.ip_network('100.64.0.0/10') or
+                    address in ipaddress.ip_network('fd7a:115c:a1e0::/48'))
+        except (ValueError, TypeError):
+            return False
+    if (parsed.scheme != 'https' and not (parsed.scheme == 'http' and permitted_http(parsed.hostname))
             or not parsed.hostname or parsed.username is not None or parsed.password is not None
             or parsed.path not in ('', '/') or parsed.query or parsed.fragment):
-        raise ValueError('Use a URL HTTPS do Hermes, sem senha ou parâmetros.')
+        raise ValueError('Use HTTPS ou HTTP com o IP Tailscale do Hermes, sem caminho, senha ou parâmetros.')
     value['server_url'] = value['server_url'].rstrip('/')+'/'
     if value['auth_origin']:
         auth = urlsplit(value['auth_origin'])
-        if (auth.scheme != 'https' and not (auth.scheme == 'http' and auth.hostname in ('127.0.0.1','localhost','::1'))
+        if (auth.scheme != 'https' and not (auth.scheme == 'http' and permitted_http(auth.hostname))
                 or not auth.hostname or auth.username is not None or auth.password is not None
                 or auth.path not in ('','/') or auth.query or auth.fragment):
             raise ValueError('Origem do login Umbrel inválida.')

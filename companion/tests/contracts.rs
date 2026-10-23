@@ -15,6 +15,10 @@ fn production_endpoint_refuses_plaintext_credentials_and_ambiguous_urls() {
     }
     assert!(Config::for_server("https://server.example:18789/").is_ok());
     assert!(Config::for_server("http://127.0.0.1:8000/").is_ok());
+    assert!(Config::for_server("http://100.64.0.10:18790/").is_ok());
+    assert!(Config::for_server("http://[fd7a:115c:a1e0::10]:18790/").is_ok());
+    assert!(Config::for_server("http://192.168.1.10:18790/").is_err());
+    assert!(Config::for_server("http://localhost:18790/").is_err());
 }
 
 #[test]
@@ -95,8 +99,11 @@ fn only_an_observed_final_event_settles_work() {
 #[test]
 fn gateway_events_are_scoped_and_never_expose_reasoning_or_tool_payloads() {
     let mut stream = protocol::Reply::new("moto-runtime");
+    stream.bind("owned-admission", Some(1));
     for event in [
         json!({"method":"event","params":{"type":"message.complete","session_id":"telegram","payload":{"text":"private-other-chat"}}}),
+        json!({"method":"event","params":{"type":"message.complete","session_id":"moto-runtime","admission_id":"previous-admission","execution_generation":1,"payload":{"text":"previous turn"}}}),
+        json!({"method":"event","params":{"type":"message.complete","session_id":"moto-runtime","admission_id":"owned-admission","execution_generation":2,"payload":{"text":"wrong generation"}}}),
         json!({"method":"event","params":{"type":"reasoning.delta","session_id":"moto-runtime","payload":{"text":"private-reasoning"}}}),
         json!({"method":"event","params":{"type":"tool.end","session_id":"moto-runtime","payload":{"text":"tool-secret"}}}),
         json!({"method":"message.delta","params":{"session_id":"telegram","text":"private-other-chat"}}),
@@ -105,12 +112,21 @@ fn gateway_events_are_scoped_and_never_expose_reasoning_or_tool_payloads() {
     ] {
         assert!(stream.feed(&event).unwrap().is_none());
     }
-    let event = json!({"method":"event","params":{"type":"message.complete","session_id":"moto-runtime","payload":{"text":"Olá, ação concluída."}}});
+    let event = json!({"method":"event","params":{"type":"message.complete","session_id":"moto-runtime","admission_id":"owned-admission","execution_generation":1,"payload":{"text":"Olá, ação concluída."}}});
     assert_eq!(
         stream.feed(&event).unwrap().unwrap(),
         "Olá, ação concluída."
     );
     assert!(stream.feed(&event).unwrap().is_none());
+}
+
+#[test]
+fn externally_cancelled_owned_queue_can_complete_without_an_execution_generation() {
+    let mut reply = protocol::Reply::new("moto-runtime");
+    reply.bind("owned", None);
+    assert!(reply.feed(&json!({"method":"event","params":{"session_id":"moto-runtime","admission_id":"owned","type":"message.complete","payload":{"text":"unverified success"}}})).unwrap().is_none());
+    assert_eq!(reply.feed(&json!({"method":"event","params":{"session_id":"moto-runtime","admission_id":"owned","type":"message.complete","payload":{"outcome":"cancelled","text":""}}})).unwrap(), Some(String::new()));
+    assert!(reply.cancelled);
 }
 
 #[test]

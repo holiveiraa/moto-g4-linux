@@ -30,21 +30,51 @@ pub fn validate_pcm(data: &[u8]) -> Result<()> {
 }
 pub struct Reply {
     session: String,
+    admission: Option<String>,
+    pub execution_generation: Option<u64>,
+    pub cancelled: bool,
     completed: bool,
 }
 impl Reply {
     pub fn new(session: &str) -> Self {
         Self {
             session: session.into(),
+            admission: None,
+            execution_generation: None,
+            cancelled: false,
             completed: false,
         }
     }
+    pub fn bind(&mut self, admission: &str, generation: Option<u64>) {
+        self.admission = Some(admission.into());
+        self.execution_generation = generation;
+    }
     pub fn feed(&mut self, value: &Value) -> Result<Option<String>> {
         let params = &value["params"];
-        if params["session_id"] != self.session || self.completed {
+        if params["session_id"] != self.session
+            || self.completed
+            || self
+                .admission
+                .as_deref()
+                .is_none_or(|id| params["admission_id"] != id)
+            || value["method"] != "event"
+        {
             return Ok(None);
         }
-        if value["method"] != "event" || params["type"] != "message.complete" {
+        let generation = params["execution_generation"].as_u64();
+        let queued_cancel = generation.is_none()
+            && self.execution_generation.is_none()
+            && params["type"] == "message.complete"
+            && params["payload"]["outcome"] == "cancelled";
+        if (generation.is_none() && !queued_cancel)
+            || (self.execution_generation.is_some() && generation != self.execution_generation)
+        {
+            return Ok(None);
+        }
+        if params["type"] == "message.start" || params["type"] == "message.complete" {
+            self.execution_generation = generation;
+        }
+        if params["type"] != "message.complete" {
             return Ok(None);
         }
         let text = params["payload"]["text"].as_str().unwrap_or("");
@@ -52,6 +82,7 @@ impl Reply {
             return Err(Error("Resposta longa demais para o app."));
         }
         self.completed = true;
+        self.cancelled = params["payload"]["outcome"] == "cancelled";
         Ok(Some(
             text.chars()
                 .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))

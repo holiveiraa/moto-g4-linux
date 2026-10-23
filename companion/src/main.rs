@@ -87,9 +87,9 @@ impl Runtime {
             .lock()
             .map_err(|_| Error("Estado indisponível."))?;
         let mut params = if model.stored.is_empty() {
-            json!({"source":"desktop","title":"Moto voice companion","idempotency_key":model.create_key,"close_on_disconnect":false})
+            json!({"source":"gui","title":"Moto voice companion","request_id":model.create_key})
         } else {
-            json!({"session_id":model.stored,"inline_images":false,"close_on_disconnect":false})
+            json!({"session_id":model.stored})
         };
         let method = if model.stored.is_empty() {
             "session.create"
@@ -188,7 +188,7 @@ impl Runtime {
             return Err(net::UNKNOWN);
         }
         let key = storage::id()?;
-        let mut params = json!({"source":"desktop","title":"Moto voice companion","idempotency_key":key,"close_on_disconnect":false});
+        let mut params = json!({"source":"gui","title":"Moto voice companion","request_id":key});
         if !self.backend.config.profile.is_empty() {
             params["profile"] = json!(self.backend.config.profile);
         }
@@ -268,18 +268,42 @@ impl Runtime {
             protocol::rpc(
                 &request,
                 "prompt.submit",
-                json!({"session_id":sid,"text":text,"voice_turn":true}),
+                json!({"session_id":sid,"text":text,"voice_turn":true,"submission_id":request}),
             ),
         )?;
         let mut reply = protocol::Reply::new(sid);
         let deadline = Instant::now() + Duration::from_secs(600);
         let mut stop_sent = false;
+        let mut cancel_sent = false;
+        let mut interrupt_sent = false;
+        let mut execution_generation = None;
+        let mut admission_id = None;
+        let mut early_events = Vec::new();
+        let mut early_bytes = 0;
         while self.alive.load(Ordering::SeqCst) && Instant::now() < deadline {
-            if self.turn_signal.load(Ordering::SeqCst) == 1 && !stop_sent {
-                net::send(
-                    &mut ws,
-                    protocol::rpc("moto-stop", "session.interrupt", json!({"session_id":sid})),
-                )?;
+            if self.turn_signal.load(Ordering::SeqCst) == 1
+                && ((execution_generation.is_some() && !interrupt_sent)
+                    || (execution_generation.is_none() && admission_id.is_some() && !cancel_sent))
+            {
+                let (method, params) = if let Some(generation) = execution_generation {
+                    interrupt_sent = true;
+                    (
+                        "session.interrupt",
+                        json!({"session_id":sid,"execution_generation":generation}),
+                    )
+                } else {
+                    cancel_sent = true;
+                    (
+                        "prompt.cancel",
+                        json!({"session_id":sid,"admission_id":admission_id}),
+                    )
+                };
+                let stop_id = if interrupt_sent {
+                    "moto-interrupt"
+                } else {
+                    "moto-cancel"
+                };
+                net::send(&mut ws, protocol::rpc(stop_id, method, params))?;
                 stop_sent = true;
                 let mut model = self
                     .model
@@ -290,7 +314,8 @@ impl Runtime {
                 self.output.event(json!({"event":"status","state":"thinking","text":"Parada solicitada; aguardando o Hermes."}));
             }
             if let Some(Message::Text(data)) = net::receive(&mut ws)? {
-                for value in protocol::frames(&data)? {
+                let mut frames: std::collections::VecDeque<_> = protocol::frames(&data)?.into();
+                while let Some(value) = frames.pop_front() {
                     if value["id"] == request {
                         let mut model = self
                             .model
@@ -301,8 +326,63 @@ impl Runtime {
                             model.save(&self.backend)?;
                             return Err(Error("O Hermes recusou a mensagem; nada foi reenviado."));
                         }
+                        if value["result"]["voice_stopped"] == true {
+                            model.turn.complete();
+                            model.save(&self.backend)?;
+                            return Ok(json!({"event":"reply","text":"","cancelled":true}));
+                        }
+                        execution_generation = value["result"]["execution_generation"].as_u64();
+                        admission_id = value["result"]["admission_id"]
+                            .as_str()
+                            .filter(|s| !s.is_empty() && s.len() <= 256)
+                            .map(str::to_owned);
+                        let admission = admission_id.as_deref().ok_or(net::UNKNOWN)?;
+                        reply.bind(admission, execution_generation);
+                        for event in early_events.drain(..).rev() {
+                            frames.push_front(event);
+                        }
                         model.turn.accept();
                         model.save(&self.backend)?;
+                    }
+                    if value["method"] == "event"
+                        && value["params"]["session_id"] == sid
+                        && admission_id.is_none()
+                        && matches!(
+                            value["params"]["type"].as_str(),
+                            Some("message.start" | "message.complete")
+                        )
+                    {
+                        early_bytes += value.to_string().len();
+                        if early_events.len() >= 32 || early_bytes > protocol::MAX_FRAME {
+                            return Err(net::UNKNOWN);
+                        }
+                        early_events.push(value);
+                        continue;
+                    }
+                    if (value["id"] == "moto-cancel" && cancel_sent)
+                        || (value["id"] == "moto-interrupt" && interrupt_sent)
+                    {
+                        if value.get("error").is_some() {
+                            return Err(Error("O Hermes não confirmou a parada. Confira a tarefa antes de continuar."));
+                        }
+                        // A terminal queued-admission receipt is authoritative even
+                        // when no assistant message was ever started.
+                        if value["id"] == "moto-cancel" && value["result"]["status"] == "started" {
+                            // The queued admission may have started before cancel
+                            // arrived. Interrupt only its acknowledged generation.
+                            execution_generation = value["result"]["execution_generation"].as_u64();
+                        }
+                        if value["id"] == "moto-cancel" && value["result"]["status"] == "terminal" {
+                            let mut model = self
+                                .model
+                                .lock()
+                                .map_err(|_| Error("Estado indisponível."))?;
+                            model.turn.complete();
+                            model.save(&self.backend)?;
+                            return Ok(
+                                json!({"event":"reply","text":"Solicitação encerrada no Hermes.","cancelled":value["result"]["outcome"] == "cancelled"}),
+                            );
+                        }
                     }
                     if value["params"]["session_id"] == sid
                         && (matches!(
@@ -316,14 +396,18 @@ impl Runtime {
                     {
                         self.output.event(json!({"event":"status","state":"approval","text":"O Hermes aguarda uma confirmação. Abra a sessão no Hermes; o app não aprova por voz."}));
                     }
-                    if let Some(text) = reply.feed(&value)? {
+                    let completed = reply.feed(&value)?;
+                    execution_generation = reply.execution_generation.or(execution_generation);
+                    if let Some(text) = completed {
                         let mut model = self
                             .model
                             .lock()
                             .map_err(|_| Error("Estado indisponível."))?;
                         model.turn.complete();
                         model.save(&self.backend)?;
-                        return Ok(json!({"event":"reply","text":text,"cancelled":stop_sent}));
+                        return Ok(
+                            json!({"event":"reply","text":text,"cancelled":stop_sent || reply.cancelled}),
+                        );
                     }
                 }
             }

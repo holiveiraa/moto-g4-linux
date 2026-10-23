@@ -104,8 +104,13 @@ online service; absence of a per-request API key does not guarantee availability
 
 Check Edge's Python dependency inside **this Hermes environment**. Install a
 missing optional feature only through Hermes's supported app-local dependency
-mechanism, within the owner's requested setup. Do not use the host's Python or
-package manager. Check that this runtime can perform the PCM conversion needed
+mechanism, within the owner's requested setup. If Edge is already installed
+and a pt-BR synthesis passed, keep that working setup; do not reinstall or
+upgrade it. For the inspected runtime the supported missing-extra command is
+`hermes pm install --extra edge-tts`, which affects this Hermes environment,
+including Telegram voice. Review that shared-runtime impact before installing
+a missing dependency. Do not use the host's Python or package manager.
+Check that this runtime can perform the PCM conversion needed
 by its existing speech route. If a converter is unavailable and cannot be
 provided inside this app's supported runtime, report it and keep text usable.
 Never install a host package, alter an app image or restart a host service.
@@ -121,6 +126,9 @@ Verify the installed version rather than blindly applying an upstream example.
 | --- | --- |
 | Protected application entry | Existing Umbrel app login remains in front of Hermes; password-only and challenged 2FA accounts both remain supported. |
 | `/api/ws` | Existing authenticated JSON-RPC: create/resume a dedicated conversation, submit a prompt and interrupt that runtime session. |
+| Canonical session parameters | Create: `source: gui`, `title`, stable `request_id`, optional `profile`. Resume: `session_id`, optional `profile`. Do not send legacy `idempotency_key`, `close_on_disconnect` or `inline_images`. |
+| Turn identity and cancellation | Submit uses a stable `submission_id`; correlate events by `params.admission_id` and `execution_generation`. Buffer early events until the receipt. Cancel a queued admission with `prompt.cancel`; if already started, interrupt its acknowledged generation. An external queued cancellation may complete without a generation; `voice_stopped: true` explicitly admits no turn. |
+| Canonical cancellation | Started turns use the acknowledged `execution_generation` with `session.interrupt`; queued turns use their own `admission_id` with `prompt.cancel` and wait for authoritative completion. |
 | Chat events | `method: event`, `params.type: message.complete`, matching runtime `session_id`, final text in `params.payload.text`. |
 | `/api/audio/voice-config` | Authenticated, profile-scoped response with `ok: true`, `tts.mode: relay`, `tts.reason: provider 'edge' has no client wire` for v0.22.4. |
 | `/api/audio/speak-stream` | Existing authenticated WS accepts text and returns JSON start/end metadata plus mono S16_LE PCM. |
@@ -155,9 +163,17 @@ The owner supplies the actual application URL to the phone and enters the
 Umbrel password there. If the account has no 2FA, enter only the password; if
 Umbrel challenges for a code, the phone asks for it. Do not enable/disable 2FA,
 extract Umbrel account secrets or export browser cookies to make onboarding work.
-The current client requires an existing HTTPS application entry. If the owner
-only has HTTP access, report that missing capability rather than attempting
-host/proxy/port changes. App-local Edge success does not solve that boundary.
+The client accepts existing HTTPS, or HTTP addressed to a numeric Tailscale
+peer with the Moto's VPN verified and all HTTP/WS sockets bound to its TUN.
+For an HTTP-only Umbrel, provide the existing app port/profile; the owner uses
+the Umbrel Tailscale IP on the phone. No host HTTPS/Serve/Funnel/proxy setup or
+port changes are needed. Never replace this with public/LAN HTTP or remove
+Umbrel authentication. App-local Edge success is still distinct from a phone test.
+
+The dashboard sidecar uses the pinned
+[canonical session contracts](https://github.com/NousResearch/hermes-agent/blob/4d04303818b61bf3aa09278af48356315515965b/tui_gateway/contracts/canonical_sessions.py),
+which differ from the legacy standalone `contracts/sessions.py` even at the
+same commit. Validate the actual transport, not only the Hermes version label.
 
 Return a short report: installed Hermes version, agreed profile, confirmed Edge
 voice, which app-local checks passed, backup/rollback location, any app-runtime

@@ -93,7 +93,36 @@ It checks known/unknown/changed host keys, saved/correct/wrong/empty passwords a
 manual override. The random fixture secret is removed on completion. This is an
 integration test, not a production runtime dependency.
 
-## Hardware acceptance
+## Isolated HTTP-over-Tailscale confinement review
+
+[`review-tailnet.py`](review-tailnet.py) runs only in a disposable root Linux
+container with its own network namespace, `NET_ADMIN`, Python3 and iproute2.
+Install those test dependencies first, then disconnect **that container** from
+external networks; the script requires only `lo` to exist before starting.
+Mount only public source and the built host Rust binary. Run inside it:
+
+```sh
+MOTO_TAILNET_REVIEW=1 MOTO_HERMES_BINARY=/path/to/moto-hermes \
+  python3 tests/review-tailnet.py
+```
+
+It creates a synthetic LocalAPI Unix socket and a dummy `tailscale0` only in
+that disposable namespace. It verifies actual HTTP and WS Upgrade delivery,
+then stopped VPN, unknown peer, down interface and a missing trusted interface
+while the destination remains assigned to an alternative interface. The latter
+cases must send no HTTP/WS request, including reuse of the same worker and HTTP
+connection pool. It removes only its own socket/interface.
+No real VPN enrollment, route policy, credentials or remote server is used.
+This verifies those request paths, not an established WebSocket across interface
+removal, WireGuard encryption or phone-kernel acceptance.
+
+Rust gateway fixtures enforce the **canonical** v0.22.4 session field set:
+`source: gui`, `request_id`, minimal resume, generation-bound interruption and
+owned queued-admission cancellation. They reject unknown fields with `4001`
+instead of accepting a fabricated legacy request. See the pinned
+[canonical contracts](https://github.com/NousResearch/hermes-agent/blob/4d04303818b61bf3aa09278af48356315515965b/tui_gateway/contracts/canonical_sessions.py).
+
+## Physical acceptance
 
 Only the owner can confirm physical feel, audio output and unplugged Power-on.
 Use [status](../docs/status.md) and the final phase of

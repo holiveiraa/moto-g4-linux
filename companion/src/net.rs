@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-use crate::{auth, config::Config, protocol, storage, Error, Result};
+use crate::{auth, config::Config, protocol, storage, tailnet, Error, Result};
 use reqwest::{
     blocking::{Client, Response},
     cookie::{CookieStore, Jar},
@@ -8,7 +8,7 @@ use reqwest::{
 use serde_json::{json, Value};
 use std::{
     io::{Read, Write},
-    net::{TcpStream, ToSocketAddrs},
+    net::TcpStream,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU8, Ordering},
@@ -30,7 +30,8 @@ pub const UNKNOWN: Error =
 #[derive(Clone)]
 pub struct Backend {
     pub config: Config,
-    pub client: Client,
+    client: Client,
+    tailnet_client: Client,
     pub jar: Arc<Jar>,
     tls: Arc<rustls::ClientConfig>,
     pub directory: PathBuf,
@@ -46,6 +47,14 @@ impl Backend {
             .timeout(Duration::from_secs(20))
             .connect_timeout(Duration::from_secs(8))
             .user_agent("MotoHermes/0.1");
+        let mut tailnet_builder = Client::builder()
+            .redirect(Policy::none())
+            .cookie_provider(jar.clone())
+            .no_proxy()
+            .timeout(Duration::from_secs(20))
+            .connect_timeout(Duration::from_secs(8))
+            .user_agent("MotoHermes/0.1")
+            .interface(tailnet::INTERFACE);
         let mut roots = rustls::RootCertStore::empty();
         for cert in rustls_native_certs::load_native_certs().certs {
             let _ = roots.add(cert);
@@ -59,10 +68,10 @@ impl Backend {
             let mut count = 0;
             for cert in rustls_pemfile::certs(&mut data.as_slice()) {
                 let cert = cert.map_err(|_| Error("Certificado CA inválido."))?;
-                builder = builder.add_root_certificate(
-                    reqwest::Certificate::from_der(cert.as_ref())
-                        .map_err(|_| Error("Certificado CA inválido."))?,
-                );
+                let extra = reqwest::Certificate::from_der(cert.as_ref())
+                    .map_err(|_| Error("Certificado CA inválido."))?;
+                builder = builder.add_root_certificate(extra.clone());
+                tailnet_builder = tailnet_builder.add_root_certificate(extra);
                 roots
                     .add(cert)
                     .map_err(|_| Error("Certificado CA inválido."))?;
@@ -103,14 +112,22 @@ impl Backend {
         Ok(Self {
             config,
             client: builder.build().map_err(|_| NETWORK)?,
+            tailnet_client: tailnet_builder.build().map_err(|_| NETWORK)?,
             jar,
             tls: Arc::new(tls),
             directory: directory.into(),
         })
     }
+    fn client_for(&self, url: &url::Url) -> Result<&Client> {
+        if tailnet::verify(url)?.is_some() {
+            Ok(&self.tailnet_client)
+        } else {
+            Ok(&self.client)
+        }
+    }
     pub fn discover(&self) -> Result<String> {
         let response = self
-            .client
+            .client_for(&self.config.url())?
             .get(self.config.url())
             .send()
             .map_err(|_| NETWORK)?;
@@ -124,7 +141,7 @@ impl Backend {
             return Err(Error("Confira a senha e o código de 2FA."));
         }
         let response = self
-            .client
+            .client_for(&self.config.url())?
             .get(self.config.url())
             .send()
             .map_err(|_| NETWORK)?;
@@ -141,7 +158,7 @@ impl Backend {
             return Err(Error("Operação cancelada."));
         }
         let response = self
-            .client
+            .client_for(&target)?
             .post(target)
             .json(&json!({"userId":self.config.user_id,"password":password,"totpToken":totp}))
             .send()
@@ -166,7 +183,7 @@ impl Backend {
             return Err(Error("Operação cancelada."));
         }
         let response = self
-            .client
+            .client_for(&url)?
             .post(url)
             .form(&[("r", r), ("handoff", handoff)])
             .send()
@@ -207,6 +224,7 @@ impl Backend {
     }
     pub fn socket(&self, route: &str, token: &str) -> Result<Socket> {
         let origin = self.config.url();
+        let private_ip = tailnet::verify(&origin)?;
         let mut url = self.config.route(route);
         url.query_pairs_mut().append_pair("token", token);
         let scheme = if origin.scheme() == "https" {
@@ -227,14 +245,22 @@ impl Backend {
                 .parse()
                 .map_err(|_| NETWORK)?,
         );
-        let host = origin.host_str().ok_or(NETWORK)?;
         let mut connected = None;
-        for address in (host, origin.port_or_known_default().ok_or(NETWORK)?)
-            .to_socket_addrs()
+        for address in origin
+            .socket_addrs(|| None)
             .map_err(|_| NETWORK)?
+            .into_iter()
             .take(8)
         {
-            if let Ok(stream) = TcpStream::connect_timeout(&address, Duration::from_secs(5)) {
+            let attempt = if let Some(ip) = private_ip {
+                if address.ip() != ip {
+                    return Err(tailnet::REQUIRED);
+                }
+                tailnet::connect_bound(address)
+            } else {
+                TcpStream::connect_timeout(&address, Duration::from_secs(5)).map_err(|_| NETWORK)
+            };
+            if let Ok(stream) = attempt {
                 connected = Some(stream);
                 break;
             }
@@ -312,7 +338,7 @@ impl Backend {
         // This response can contain keys for OTHER providers: never log, persist
         // or forward it. The inspected v0.22.4 relay verdict identifies Edge.
         let response = self
-            .client
+            .client_for(&self.config.route("/api/audio/voice-config"))?
             .get(self.config.route("/api/audio/voice-config"))
             .bearer_auth(token)
             .send()

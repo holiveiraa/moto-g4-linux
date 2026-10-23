@@ -32,6 +32,7 @@ struct Fixture {
     edge: Arc<AtomicBool>,
     creates: Arc<AtomicUsize>,
     fail_create: Arc<AtomicBool>,
+    queued: Arc<AtomicUsize>,
     root: PathBuf,
     task: Option<thread::JoinHandle<()>>,
 }
@@ -48,6 +49,7 @@ impl Fixture {
         let edge = Arc::new(AtomicBool::new(true));
         let creates = Arc::new(AtomicUsize::new(0));
         let fail_create = Arc::new(AtomicBool::new(false));
+        let queued = Arc::new(AtomicUsize::new(0));
         let root =
             std::env::temp_dir().join(format!("moto-hermes-gateway-{}", storage::id().unwrap()));
         fs::create_dir(&root).unwrap();
@@ -55,6 +57,7 @@ impl Fixture {
         let provider = edge.clone();
         let sessions = creates.clone();
         let failing = fail_create.clone();
+        let waiting = queued.clone();
         let task = thread::spawn(move || {
             let mut children = Vec::new();
             while !stopper.load(Ordering::SeqCst) {
@@ -65,6 +68,7 @@ impl Fixture {
                         let provider = provider.clone();
                         let sessions = sessions.clone();
                         let failing = failing.clone();
+                        let waiting = waiting.clone();
                         children.push(thread::spawn(move || {
                             serve(
                                 stream,
@@ -76,6 +80,7 @@ impl Fixture {
                                 provider,
                                 sessions,
                                 failing,
+                                waiting,
                             )
                         }));
                     }
@@ -96,6 +101,7 @@ impl Fixture {
             edge,
             creates,
             fail_create,
+            queued,
             root,
             task: Some(task),
         }
@@ -225,6 +231,7 @@ fn serve(
     edge: Arc<AtomicBool>,
     creates: Arc<AtomicUsize>,
     fail_create: Arc<AtomicBool>,
+    queued: Arc<AtomicUsize>,
 ) {
     stream
         .set_read_timeout(Some(Duration::from_secs(3)))
@@ -268,6 +275,32 @@ fn serve(
         let mut active = String::from("runtime-moto");
         while let Ok(Message::Text(data)) = ws.read() {
             let value: Value = serde_json::from_str(&data).unwrap();
+            // Pinned tui_gateway/contracts/canonical_sessions.py, v0.22.4.
+            // The legacy standalone sessions.py has different fields.
+            let allowed: &[&str] = match value["method"].as_str().unwrap_or("") {
+                "session.create" => &["source", "title", "request_id", "profile"],
+                "session.resume" => &["session_id", "profile"],
+                "prompt.submit" => &["session_id", "text", "voice_turn", "submission_id"],
+                "session.interrupt" => &["session_id", "execution_generation"],
+                "prompt.cancel" => &["session_id", "admission_id"],
+                _ => &[],
+            };
+            let invalid = value["params"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .any(|key| !allowed.contains(&key.as_str()))
+                || (value["method"] == "session.create"
+                    && (value["params"]["source"] != "gui"
+                        || value["params"]["request_id"]
+                            .as_str()
+                            .is_none_or(str::is_empty)))
+                || (value["method"] == "session.interrupt"
+                    && value["params"]["execution_generation"] != 1);
+            if invalid {
+                let _ = ws.send(Message::Text(json!({"jsonrpc":"2.0","id":value["id"],"error":{"code":4001,"message":"invalid_params"}}).to_string().into()));
+                continue;
+            }
             if value["method"] == "session.create" && fail_create.load(Ordering::SeqCst) {
                 let _ = ws.send(Message::Text(json!({"jsonrpc":"2.0","id":value["id"],"error":{"code":-32000,"message":"fixture create rejected"}}).to_string().into()));
                 continue;
@@ -281,22 +314,40 @@ fn serve(
                         format!("-{n}")
                     };
                     active = format!("runtime-moto{suffix}");
-                    json!({"session_id":active,"stored_session_id":format!("stored-moto{suffix}"),"messages":[],"running":false})
+                    json!({"session_id":active,"stored_session_id":format!("stored-moto{suffix}"),"messages":[],"running":false,"execution_generation":0})
                 }
                 "session.resume" => {
                     let stored = value["params"]["session_id"].as_str().unwrap();
                     assert!(stored.starts_with("stored-moto"));
                     active = stored.replacen("stored-", "runtime-", 1);
-                    json!({"session_id":active,"resumed":stored,"messages":[],"running":false})
+                    json!({"session_id":active,"stored_session_id":stored,"messages":[],"running":false,"execution_generation":0})
                 }
                 "prompt.submit" => {
                     assert_eq!(value["params"]["session_id"], active);
                     count.fetch_add(1, Ordering::SeqCst);
-                    json!({"status":"streaming"})
+                    if queued.load(Ordering::SeqCst) == 5 {
+                        json!({"voice_stopped":true})
+                    } else if matches!(queued.load(Ordering::SeqCst), 1 | 2 | 4) {
+                        json!({"status":"queued","execution_generation":null,"admission_id":"fixture-admission"})
+                    } else {
+                        json!({"status":"started","execution_generation":1,"admission_id":"fixture-admission"})
+                    }
+                }
+                "prompt.cancel" => {
+                    assert_eq!(value["params"]["session_id"], active);
+                    assert_eq!(value["params"]["admission_id"], "fixture-admission");
+                    if queued.load(Ordering::SeqCst) == 2 {
+                        json!({"status":"started","execution_generation":1,"admission_id":"fixture-admission"})
+                    } else {
+                        json!({"status":"terminal","outcome":"cancelled","execution_generation":null,"admission_id":"fixture-admission"})
+                    }
                 }
                 "session.interrupt" => json!({"status":"interrupted"}),
                 other => panic!("unexpected fixture method {other}"),
             };
+            if value["method"] == "prompt.submit" && queued.load(Ordering::SeqCst) == 3 {
+                let _ = ws.send(Message::Text(json!({"method":"event","params":{"session_id":active,"admission_id":"fixture-admission","execution_generation":1,"type":"message.complete","payload":{"text":"Completed before receipt."}}}).to_string().into()));
+            }
             if ws
                 .send(Message::Text(
                     json!({"jsonrpc":"2.0","id":value["id"],"result":result})
@@ -308,11 +359,34 @@ fn serve(
                 return;
             }
             if value["method"] == "prompt.submit" {
+                if matches!(queued.load(Ordering::SeqCst), 3 | 5) {
+                    continue;
+                }
+                if queued.load(Ordering::SeqCst) == 4 {
+                    for (admission, kind, generation, text) in [
+                        (
+                            "previous-admission",
+                            "message.complete",
+                            8,
+                            "Not the Moto reply.",
+                        ),
+                        ("fixture-admission", "message.start", 9, ""),
+                        (
+                            "fixture-admission",
+                            "message.complete",
+                            9,
+                            "Owned queued reply.",
+                        ),
+                    ] {
+                        let _ = ws.send(Message::Text(json!({"method":"event","params":{"session_id":active,"admission_id":admission,"execution_generation":generation,"type":kind,"payload":{"text":text}}}).to_string().into()));
+                    }
+                    continue;
+                }
                 if drop_turn {
                     let _ = ws.close(None);
                     return;
                 }
-                if wait_cancel {
+                if wait_cancel || queued.load(Ordering::SeqCst) != 0 {
                     continue;
                 }
                 for (session, kind, text) in [
@@ -324,10 +398,10 @@ fn serve(
                         "Olá, resposta do fixture.",
                     ),
                 ] {
-                    if ws.send(Message::Text(json!({"jsonrpc":"2.0","method":"event","params":{"session_id":session,"type":kind,"payload":{"text":text}}}).to_string().into())).is_err() { return; }
+                    if ws.send(Message::Text(json!({"jsonrpc":"2.0","method":"event","params":{"session_id":session,"admission_id":"fixture-admission","execution_generation":1,"type":kind,"payload":{"text":text}}}).to_string().into())).is_err() { return; }
                 }
             } else if value["method"] == "session.interrupt" {
-                let _ = ws.send(Message::Text(json!({"method":"event","params":{"session_id":active,"type":"message.complete","payload":{"text":"Interrompido."}}}).to_string().into()));
+                let _ = ws.send(Message::Text(json!({"method":"event","params":{"session_id":active,"admission_id":"fixture-admission","execution_generation":1,"type":"message.complete","payload":{"text":"Interrompido."}}}).to_string().into()));
             }
         }
         return;
@@ -436,7 +510,13 @@ fn login_2fa_handoff_cookie_and_authenticated_websocket() {
     assert_eq!(token, "fixture-hermes-token");
     let mut ws = backend.socket("/api/ws", &token).unwrap();
     assert_eq!(
-        net::call(&mut ws, "session.create", json!({}), &alive).unwrap()["stored_session_id"],
+        net::call(
+            &mut ws,
+            "session.create",
+            json!({"source":"gui","request_id":"fixture-create","title":"Moto fixture"}),
+            &alive
+        )
+        .unwrap()["stored_session_id"],
         "stored-moto"
     );
 }
@@ -538,6 +618,79 @@ fn cancelling_a_turn_sends_scoped_interrupt_and_waits_for_finalization() {
     }
     app.send(json!({"cmd":"cancel"}));
     assert_eq!(app.event("reply")["cancelled"], true);
+}
+
+#[test]
+fn queued_turn_cancellation_uses_owned_admission_and_requires_terminal_receipt() {
+    let fixture = Fixture::new(false, false);
+    fixture.queued.store(1, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"wait in queue"}));
+    for _ in 0..100 {
+        if fixture.submits.load(Ordering::SeqCst) > 0 {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    app.send(json!({"cmd":"cancel"}));
+    assert_eq!(app.event("reply")["cancelled"], true);
+    fixture.queued.store(0, Ordering::SeqCst);
+    app.send(json!({"cmd":"send","text":"fresh request after confirmed cancellation"}));
+    app.event("reply");
+    assert_eq!(fixture.submits.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn queued_admission_that_starts_before_cancel_requires_a_scoped_interrupt() {
+    let fixture = Fixture::new(false, false);
+    fixture.queued.store(2, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"start while cancelling"}));
+    for _ in 0..100 {
+        if fixture.submits.load(Ordering::SeqCst) > 0 {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    app.send(json!({"cmd":"cancel"}));
+    let reply = app.event("reply");
+    assert_eq!(reply["cancelled"], true);
+    assert_eq!(reply["text"], "Interrompido.");
+}
+
+#[test]
+fn completion_before_submit_receipt_is_buffered_and_correlated() {
+    let fixture = Fixture::new(false, false);
+    fixture.queued.store(3, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"quick completion"}));
+    assert_eq!(app.event("reply")["text"], "Completed before receipt.");
+}
+
+#[test]
+fn server_voice_stop_without_an_admission_does_not_leave_a_pending_turn() {
+    let fixture = Fixture::new(false, false);
+    fixture.queued.store(5, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"stop"}));
+    assert_eq!(app.event("reply")["cancelled"], true);
+    fixture.queued.store(0, Ordering::SeqCst);
+    app.send(json!({"cmd":"send","text":"new question"}));
+    app.event("reply");
+}
+
+#[test]
+fn queued_turn_ignores_previous_admission_completion_in_the_same_session() {
+    let fixture = Fixture::new(false, false);
+    fixture.queued.store(4, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"wait behind previous admission"}));
+    assert_eq!(app.event("reply")["text"], "Owned queued reply.");
 }
 
 #[test]

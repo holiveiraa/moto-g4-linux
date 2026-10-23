@@ -18,6 +18,17 @@ The setup supports both **Umbrel password only** and **password + optional 2FA**
 Everyone uses their own server/account, CA trust and Groq key. The new app does
 not replace the terminal, SSH or Tailscale setup.
 
+HTTPS keeps certificate/hostname validation. HTTP is accepted only for a
+numeric, verified Tailscale peer with all HTTP/WS sockets bound to the existing
+`tailscale0` TUN; public/LAN HTTP and HTTP DNS names are refused. The local
+daemon's root-owned Unix socket proves the peer membership. No host HTTPS
+proxy is required for an HTTP-only Umbrel. See
+[transport setup](../docs/hermes-setup.md#http-over-your-existing-tailscale).
+
+The dashboard uses the canonical session contract, not the legacy standalone
+dispatcher: `source: gui`, `request_id`, minimal resume, and generation/admission
+scoped cancellation. Strict fixtures exercise those fields.
+
 Build on a Linux filesystem with the versions in
 [toolchains.json](toolchains.json), then run:
 

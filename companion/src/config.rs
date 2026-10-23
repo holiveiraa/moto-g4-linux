@@ -18,7 +18,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            server_url: "https://server.example:18789/".into(),
+            server_url: "https://server.example:18790/".into(),
             auth_origin: None,
             user_id: "0".into(),
             profile: String::new(),
@@ -62,7 +62,7 @@ impl Config {
             return Url::parse(value).expect("validated auth origin");
         }
         let mut url = self.url();
-        url.set_port(Some(2000)).expect("HTTPS origin");
+        url.set_port(Some(2000)).expect("validated app origin");
         url
     }
     pub fn route(&self, path: &str) -> Url {
@@ -83,10 +83,9 @@ impl Config {
     }
 }
 pub fn endpoint(value: &str) -> Result<Url> {
-    let url = Url::parse(value).map_err(|_| Error("Informe a URL HTTPS do Hermes."))?;
-    let loopback = matches!(url.host_str(), Some("127.0.0.1" | "[::1]" | "localhost"));
-    if (url.scheme() != "https" && !(url.scheme() == "http" && loopback))
-        || url.host_str().is_none()
+    let url = Url::parse(value).map_err(|_| Error("Informe o endereço do Hermes."))?;
+    crate::tailnet::candidate(&url)?;
+    if url.host_str().is_none()
         || !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()
@@ -94,7 +93,7 @@ pub fn endpoint(value: &str) -> Result<Url> {
         || url.path() != "/"
     {
         return Err(Error(
-            "Use uma origem HTTPS, sem senha, caminho ou parâmetros na URL.",
+            "Use HTTPS ou HTTP pelo IP Tailscale, sem senha, caminho ou parâmetros na URL.",
         ));
     }
     Ok(url)

@@ -48,6 +48,13 @@ Hermes chat API and replies through its Edge speech relay. The phone owns its
 conversation ID in the configured profile. Closing retains it; **Nova conversa**
 replaces it after server confirmation. Telegram sessions are not merged.
 
+HTTPS uses normal system/private-CA validation. For HTTP-only Umbrel entries,
+`companion/src/tailnet.rs` verifies the local root-owned Tailscale LocalAPI,
+running TUN mode and the numeric destination's peer membership. HTTP and WS
+sockets bind to `tailscale0` before connecting; each request is guarded and
+cannot fall back to ordinary routing. This mode uses the existing VPN and
+gateway, with no Umbrel host or TLS/proxy configuration changes.
+
 ## Important adaptations
 
 - **Framebuffer:** expose the existing driver device link; use the AsteroidOS

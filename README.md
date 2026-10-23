@@ -46,6 +46,9 @@ interface previews, not evidence of a live agent conversation. See
   without resetting Telegram or deleting earlier chats.
 - **Your existing Umbrel protection:** password-only accounts work; a code is
   requested only if the account requires 2FA. Wi-Fi or Tailscale supplies the route.
+- **HTTP-only Umbrel supported through Tailscale:** use the server's numeric
+  peer IP and existing app port; the client verifies and confines HTTP/WS to
+  the encrypted VPN. No server HTTPS configuration is required.
 - **Back to Linux whenever you want:** closing releases capture/playback and
   restores the terminal; GUI restarts preserve tmux sessions.
 
@@ -63,7 +66,7 @@ or [tutorial completo em português](docs/hermes-quickstart.pt-BR.md).
 | Side | What to do |
 | --- | --- |
 | **Hermes server** | Give your running Hermes the prompt below and the [server-agent guide](docs/hermes-server-agent.md). It checks its own version/profile and prepares Edge speech inside its own app runtime. |
-| **Moto app** | Install the matching userspace components, then enter your HTTPS app URL, account/profile, CA if needed and your own Groq key. Log in on the phone. [Build/install/configuration](docs/hermes-setup.md). |
+| **Moto app** | Install matching components, then enter the app origin (HTTPS, or HTTP via its numeric Tailscale IP), account/profile, CA for private HTTPS if needed and your Groq key. Log in on the phone. [Configuration](docs/hermes-setup.md). |
 
 **Copy this to your Hermes server agent:**
 

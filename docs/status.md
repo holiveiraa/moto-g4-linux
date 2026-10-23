@@ -181,6 +181,45 @@ Moto-owned context; closing restores the terminal. No push-to-talk main flow.
   handles only its own app/profile setup using the
   [server-agent instructions](hermes-server-agent.md).
 
+## Hermes canonical API and HTTP through Tailscale — 23 October 2026
+
+The server-side diagnosis exposed a gap in the original permissive fixtures:
+the native `/api/ws` authority uses **canonical** session contracts, while the
+earlier client sent fields from the standalone gateway. Creation now sends
+`source: gui`, a title and a stable `request_id`; resume sends the persistent
+session ID and optional profile. Replies are correlated to the acknowledged
+admission and execution generation, including events arriving before the submit
+receipt. Cancellation covers queued work, the queue-to-running race and external
+queue cancellation. No failed or uncertain submission is automatically replayed.
+
+HTTP-only Umbrel installations can now use an existing numeric Tailscale peer
+IP and app port. The Rust client checks the protected local Tailscale API,
+peer membership and interface state before requests, and binds HTTP/WS sockets
+to `tailscale0`. HTTPS verification and the separate HTTPS Groq client remain
+in place. See [connection setup](hermes-setup.md#http-over-your-existing-tailscale).
+
+- **116 Python regressions** and **37 Rust tests** pass on Linux/WSL;
+  Rustfmt and Clippy also pass. Strict fixtures reject legacy session fields
+  and exercise same-session foreign admissions, pre-receipt completion, queue
+  transitions, cancellation and the explicit server `voice_stopped` result.
+- A clean public-source snapshot builds a static **ARM64 musl** core (3,511,848
+  bytes), SHA256
+  `fb561293e1eb152ef4d7a2d1b4da88482514be3fcf250730e371424eec5a94f7`.
+  Compilation does not establish native runtime acceptance.
+- The isolated host Tk/XTest review also passes: fullscreen face, native setup
+  fields, password/optional 2FA, blank/close cleanup and preserved tmux/input.
+- An isolated disposable network namespace exercises actual HTTP and WS Upgrade
+  requests to a synthetic peer. The same worker and HTTP connection pool refuse
+  stopped VPN, unknown peer, down interface and a still-reachable destination
+  after the trusted interface disappears. This does not measure an established
+  WebSocket across a physical VPN outage or prove the old Moto kernel's behavior.
+- These latest corrections still require installation/native acceptance on the
+  reference Moto. Its USB maintenance link currently times out. The previous
+  installed revision's native fixture results above do not validate this build.
+  The owner reports Edge TTS is already prepared in Hermes; this client agent
+  did not install or change anything on that server.
+- Complete owner login and an audible Groq → Hermes → Edge turn remain pending.
+
 ## Distribution maturity
 
 The repository is an **experimental source port with an agent-assisted workflow**.

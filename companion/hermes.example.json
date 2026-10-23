@@ -1,5 +1,5 @@
 {
-  "server_url": "https://server.example:18789/",
+  "server_url": "https://server.example:18790/",
   "auth_origin": "https://server.example:2000/",
   "user_id": "0",
   "profile": "",

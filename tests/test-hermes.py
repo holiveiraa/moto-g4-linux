@@ -60,6 +60,16 @@ class CaptureOwnership(unittest.TestCase):
 
 
 class CompanionFiles(unittest.TestCase):
+    def test_http_tailnet_candidate_is_saved_but_lan_and_http_dns_are_rejected(self):
+        h = module('moto-hermes')
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)/'hermes.json'
+            for url in ('http://100.64.0.10:18790/', 'http://[fd7a:115c:a1e0::10]:18790/'):
+                h.save_config(dict(h.DEFAULTS,server_url=url),path)
+                self.assertEqual(h.settings(path)['server_url'],url)
+            for url in ('http://192.168.1.10:18790/', 'http://server.example/', 'http://localhost:80/', 'http://100.128.0.1/'):
+                with self.assertRaises(ValueError): h.save_config(dict(h.DEFAULTS,server_url=url),path)
+
     def test_settings_are_private_and_invalid_changes_preserve_previous_value(self):
         h = module('moto-hermes')
         with tempfile.TemporaryDirectory() as folder:

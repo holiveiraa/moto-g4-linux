@@ -8,6 +8,7 @@ pub mod net;
 pub mod protocol;
 pub mod state;
 pub mod storage;
+pub mod tailnet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Error(pub &'static str);

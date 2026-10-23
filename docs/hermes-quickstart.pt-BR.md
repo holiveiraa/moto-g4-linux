@@ -17,7 +17,7 @@ precisa ser validada pelo proprietário. Não há instalador universal.
 | Hermes | Sua instância existente, um perfil combinado e APIs compatíveis. O cliente foi desenvolvido para Hermes v0.22.4/Umbrel 2.0. |
 | Transcrição | Sua chave Groq cadastrada privadamente no Moto. Não publique nem envie a chave pelo chat. |
 | Resposta falada | Edge TTS preparado dentro do próprio Hermes, com uma voz pt-BR disponível. |
-| Acesso | URL HTTPS do **app Hermes** que você já usa pelo Wi-Fi/Tailscale, conta Umbrel e senha. 2FA só se habilitado na conta. |
+| Acesso | Origem do **app Hermes**: HTTPS, ou HTTP pelo IP numérico Tailscale com a VPN conectada no Moto. Conta Umbrel e senha; 2FA só se habilitado. |
 
 Se está começando com outro telefone, use primeiro o
 [guia de instalação por agente](agent-installation.md). Se a base Linux já
@@ -67,10 +67,10 @@ conversa normal é por voz.
 
 | Campo/opção | O que preencher |
 | --- | --- |
-| URL do Hermes | A **origem HTTPS do app**: hostname e porta, se houver. Exemplo fictício: `https://server.example:8443`. Não inclua caminho, senha, token ou parâmetros. Não use uma porta interna de container. |
+| URL do Hermes | A **origem do app**: `https://server.example:8443`, ou HTTP pelo IP Tailscale, como `http://100.64.0.10:18790` (exemplos fictícios). Não inclua caminho, senha, token ou parâmetros nem use uma porta interna de container. |
 | Conta Umbrel | O identificador da conta com acesso ao app; `0` é a conta proprietária no contrato inspecionado. |
 | Perfil Hermes | O perfil confirmado pelo próprio Hermes. Deixe o padrão somente se ele confirmou que é esse mesmo. |
-| Origem do login Umbrel | Normalmente vazia: o cliente usa o mesmo hostname na porta 2000 no contrato Umbrel 2.0. Se sua instalação expuser outra origem, use a origem HTTPS exata e verificada. |
+| Origem do login Umbrel | Normalmente vazia: o cliente usa o mesmo esquema/endereço na porta 2000. Outra origem precisa ser exata, permitida e verificada. |
 | CA adicional | Vazia se o certificado já for confiável no sistema. Para CA privada, use o caminho de um PEM obtido e conferido independentemente. Não desative validação TLS. |
 | Respostas faladas | Ative para ouvir o Hermes. |
 | Lembrar sessão | Opcional. Guarda um cookie local de acesso do app, não a senha. Esse cookie pode autorizar outros apps permitidos à mesma conta; proteja o aparelho. |
@@ -79,9 +79,25 @@ Salve e conecte. O endereço precisa estar acessível **pelo Moto**, com hostnam
 compatível com o certificado. Wi-Fi e Tailscale são rotas; não troque de conta
 Tailscale nem altere SSH para configurar o app. Não copie cookies do navegador.
 
-Este cliente exige HTTPS. Se a única entrada existente do app for HTTP,
-informe essa incompatibilidade: o guia não autoriza o Hermes a mudar o gateway,
-abrir uma porta interna ou administrar o host do Umbrel para contorná-la.
+### Seu Umbrel usa HTTP? Use o Tailscale já existente
+
+Ative/confira a conexão em **Painel → VPN / Tailscale**, na sua conta atual.
+Na lista de dispositivos da sua Tailscale, copie o **IP do Umbrel**,
+mantenha a porta pública do app Hermes e
+use `http://IP:porta`. Por exemplo, um endereço de navegador como
+`http://umbrel.local:18790/chat?profile=default` vira
+`http://100.64.0.10:18790` no campo URL e `default` no campo Perfil, substituindo
+o IP de exemplo pelo seu. Não inclua `/chat` nem `?profile=...` na URL.
+
+Você pode usar esse mesmo endereço em casa ou conectado ao Wi-Fi de um hotspot,
+desde que Moto e Umbrel tenham internet e acesso pela Tailscale. A senha Umbrel
+continua sendo pedida; não é necessário configurar HTTPS no servidor nem mexer
+no host do Umbrel. Em HTTP, o campo CA fica vazio.
+
+O cliente verifica o daemon local e o peer e prende os sockets HTTP/WS à
+interface Tailscale. Se a VPN parar, ele falha sem tentar a rede comum.
+HTTP em IP da LAN, hostname `.local`, nome DNS ou IP público não é aceito.
+Para HTTPS, a validação do certificado continua normal.
 
 ### Se você não usa 2FA
 
