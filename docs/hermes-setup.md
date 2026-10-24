@@ -9,7 +9,7 @@ menu. Rust owns hearing/network/speech/animation; Tk hosts the native canvas and
 setup/password fields.
 
 **Status: experimental app on the reference Moto.** Current verification includes
-56 Rust fixtures, 124 offline Python regressions and isolated native GUI reviews.
+57 Rust fixtures, 124 offline Python regressions and isolated native GUI reviews.
 The real Groq/Hermes/Edge chain also passed with a known question played through
 the physical speaker and microphone, followed by 60 seconds of rearmed listening
 without an extra transcription or agent request. Local speech verification now
@@ -123,7 +123,7 @@ workflow, including for diagnostics.
   Windows can continue owning USB. Normal builds never contact a device.
 
 Standby activation runs locally using WebRTC endpointing, a pinned Silero speech
-verifier and a pinned multilingual Whisper tiny model. The activation clip is discarded, never uploaded. After
+verifier and a pinned multilingual Whisper base model. The activation clip is discarded, never uploaded. After
 acknowledgment, each utterance is sent to Groq when speech ends automatically.
 Replies reach the server's online Edge service after its provider verdict is
 confirmed. Both normal transcription and speech synthesis require internet.
@@ -191,11 +191,11 @@ python3 scripts/build-wake.py --target host
 python3 scripts/build-wake.py --target aarch64-linux-musl
 ```
 
-The helper verifies the source archive, multilingual `ggml-tiny-q5_1.bin`
+The helper verifies the source archive, multilingual `ggml-base-q5_1.bin`
 and `ggml-silero-v6.2.0.bin`
 against [pinned hashes](../companion/wake/pins.json), builds a static CPU-only
 `moto-wake` and `moto-vad`, and collects project/upstream/model notices. Downloads/builds remain in a
-separate Linux work folder. The model is 32,152,673 bytes; budget additional
+separate Linux work folder. The wake model is 59,707,625 bytes; budget additional
 runtime memory and measure actual heat/latency before accepting wake behavior.
 No Python speech framework or model download runs on the phone at app startup.
 The small C++ bridge uses maintained whisper.cpp; the coordinator, voice state,
@@ -214,7 +214,7 @@ The optional companion's file layout is:
 | `/usr/local/bin/moto-hermes` | Verified ARM64 Rust artifact, 0755 |
 | `/usr/local/bin/moto-wake` | Verified static ARM64 recognizer artifact, 0755 |
 | `/usr/local/bin/moto-vad` | Matching static ARM64 Silero verifier, 0755 |
-| `/usr/local/share/moto-hermes/ggml-tiny-q5_1.bin` | Hash-verified model, 0644 |
+| `/usr/local/share/moto-hermes/ggml-base-q5_1.bin` | Hash-verified wake model, 0644 |
 | `/usr/local/share/moto-hermes/ggml-silero-v6.2.0.bin` | Pinned 885,098-byte speech model, 0644 |
 | `/usr/sbin/moto-hermes-pet.py` | Original fullscreen canvas |
 | `/usr/sbin/moto-hermes.py` | Private configuration / process boundary |
@@ -434,6 +434,24 @@ high-frequency noise folding into speech; it does not establish wake accuracy.
 The [Whisper loader also resamples before inference](https://github.com/openai/whisper/blob/main/whisper/audio.py).
 Real microphone/voice acceptance remains required after the synthetic chain
 review in [Testing](../tests/README.md).
+
+The current wake recognizer uses multilingual **base q5_1**. The earlier tiny
+model failed acoustic wake recognition even when its digital fixture passed.
+The neural verifier and wake recognizer each normalize their own candidate input
+peak toward 0.9 with at most 12× gain, to handle the quiet native microphone.
+The wake recognizer supplies the proper-name spelling hint `Hermes.`. It does
+not force a wake sentence or retain earlier transcript context. WebRTC, the
+near-silence floor and raw capture measurements retain the original amplitude;
+the model gains do not compound. Acceptance still requires
+the whole wake phrase and the existing confidence/no-speech thresholds; repeating
+only that phrase is one activation. The wake model is released after activation
+while conversation continues through Groq.
+
+Update the Rust runtime, `moto-wake` helper and base model together. A tiny model
+at the old path does not satisfy the new hash. For isolated reviews,
+`MOTO_HERMES_WAKE_BINARY` and `MOTO_HERMES_WAKE_MODEL` select staged assets; model
+hash verification remains mandatory. These are local process overrides, not
+server or GUI configuration fields.
 
 ### Unsolicited replies or a conversation loop
 

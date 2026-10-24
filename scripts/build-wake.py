@@ -77,7 +77,7 @@ def main():
           archive, pins['source_archive_sha256'], 30*1024*1024)
     model = cache/pins['model']
     fetch('https://huggingface.co/ggerganov/whisper.cpp/resolve/'+pins['model_revision']+'/'+pins['model'],
-          model, pins['model_sha256'], 40*1024*1024)
+          model, pins['model_sha256'], 80*1024*1024)
     vad_model = cache/pins['vad_model']
     fetch('https://huggingface.co/ggml-org/whisper-vad/resolve/'+pins['vad_model_revision']+'/'+pins['vad_model'],
           vad_model, pins['vad_model_sha256'], 2*1024*1024)

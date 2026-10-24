@@ -58,12 +58,13 @@ interface previews, not evidence of a live agent conversation. See
   restores the terminal; GUI restarts preserve tmux sessions.
 
 **Experimental:** installed on the reference Moto. Groq → Hermes → Edge passes
-with real services; a known acoustic question also passed through the physical
-microphone and speaker after a simulated wake. **Owner-voice activation failed
-the current three-attempt acceptance run and remains under investigation.**
-Complete owner conversation and heat/battery still need acceptance. Local wake
+with real services. The current base-model update passed a known acoustic wake
+phrase and question through the physical microphone/speaker, followed by 60
+seconds of listening without another request. Earlier owner-voice activation
+failed on the tiny model; owner acceptance of the new wake model and heat/battery
+still need verification. Local wake
 does not make conversation offline: transcription and synthesis need internet.
-[Evidence and limits](docs/status.md#physical-wake-diagnosis-and-capture-filtering--23-october).
+[Evidence and limits](docs/status.md#acoustic-wake-model-correction--24-october).
 
 ## Connect your Hermes: two sides, one setup
 

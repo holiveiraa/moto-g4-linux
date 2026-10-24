@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Opt-in real-service chain, synthetic microphone/speaker, isolated Tk/tmux.
+"""Opt-in real-service chain and isolated Tk/tmux, synthetic audio by default.
 
 Requires a private Xvfb DISPLAY and the installed local recognizer/model.
 Uses the owner's existing app cookie and Groq key only on this machine; creates
-one separate Hermes conversation. Never captures a physical microphone, plays
-the loudspeaker or copies credentials into results. See tests/README.md.
+one separate Hermes conversation. --physical-audio explicitly uses the real
+microphone/speaker with supplied synthetic stimuli. Never copies credentials
+or recordings into results. See tests/README.md.
 """
 import argparse
 import array
@@ -32,6 +33,10 @@ def fake_capture(folder):
         count.seek(0)
         number = int(count.read() or '0') + 1
         count.seek(0); count.truncate(); count.write(str(number)); count.flush()
+    physical = folder/'physical-tools.json'
+    if physical.exists():
+        tools = json.loads(physical.read_text())
+        os.execv(tools['arecord'], [tools['arecord'], *sys.argv[3:]])
     def send(pcm):
         for start in range(0, len(pcm), 1920):
             os.write(1, pcm[start:start+1920].ljust(1920, b'\0'))
@@ -79,6 +84,8 @@ def main():
     parser.add_argument('--expected-transcript', help='Known synthetic question text; compare without logging the returned transcript.')
     parser.add_argument('--activation', choices=('wake-word','app-open'), default='wake-word')
     parser.add_argument('--idle-seconds', type=int, default=5, help='Observe rearmed capture without another request (5-90 seconds).')
+    parser.add_argument('--physical-audio', action='store_true', help='Use the real microphone/speaker and play the supplied synthetic stimuli. Close the production voice app first.')
+    parser.add_argument('--physical-negative-first', action='store_true', help='Include a negative acoustic stimulus before the wake phrase; default physical review starts with the wake phrase.')
     args = parser.parse_args()
     if not 5 <= args.idle_seconds <= 90:
         parser.error('idle-seconds must be between 5 and 90')
@@ -101,6 +108,10 @@ def main():
     shell = terminal = None
     with tempfile.TemporaryDirectory(prefix=server+'-') as directory:
         folder = Path(directory)
+        physical_tools = {name:shutil.which(name) for name in ('arecord','aplay')}
+        if args.physical_audio:
+            if not all(physical_tools.values()): parser.error('Physical review needs arecord and aplay')
+            (folder/'physical-tools.json').write_text(json.dumps(physical_tools))
         config = folder/'config'; config.mkdir(mode=0o700)
         for original, data in originals.items(): (config/original.name).write_bytes(data)
         settings = json.loads(originals[source]); settings.update(auto_speak=True, remember_session=True, start_on_open=args.activation=='app-open')
@@ -111,16 +122,17 @@ def main():
             shutil.copyfile(supplied, folder/name)
         tools = folder/'bin'; tools.mkdir(mode=0o700)
         for name, flag in (('arecord','--fake-capture'),('aplay','--fake-playback')):
+            if args.physical_audio and name == 'aplay': continue
             wrapper = tools/name
-            wrapper.write_text('#!'+sys.executable+'\nimport os\nos.execv('+repr(sys.executable)+','+
-                repr([sys.executable,str(Path(__file__).resolve()),flag,str(folder)])+')\n')
+            wrapper.write_text('#!'+sys.executable+'\nimport os,sys\nos.execv('+repr(sys.executable)+','+
+                repr([sys.executable,str(Path(__file__).resolve()),flag,str(folder)])+'+sys.argv[1:])\n')
             wrapper.chmod(0o700)
         os.environ['PATH'] = str(tools)+os.pathsep+os.environ['PATH']
         os.environ['MOTO_UX_CONFIG'] = str(folder/'ux.json')
         backend.CONFIG = config/source.name
         backend.CAPTURE_DIAGNOSTIC = folder/'runtime/capture.json'
         backend.BINARY = str(args.binary.resolve(strict=True))
-        commands = []; events = []; failures = []; phases = []; activations = []
+        commands = []; events = []; failures = []; phases = []; activations = []; played_counts = []; listening_modes = []; speech_decisions = []
         original_worker = backend.Worker
         class ObservedWorker(original_worker):
             # Observe real commands/events, without replacing worker behavior.
@@ -129,6 +141,9 @@ def main():
                 super().send(value)
             def deliver(self, value, generation=None):
                 name = value.get('event')
+                if name == 'speech_checked': speech_decisions.append(value.get('decision'))
+                if name == 'voice_listening': listening_modes.append(value.get('mode'))
+                if name == 'spoken': played_counts.append(json.loads((config/'hermes-speech-diagnostic.json').read_text())['bytes'])
                 if name == 'wake': activations.append(value.get('source'))
                 if name == 'transcript' and args.expected_transcript is not None:
                     def normalize(text):
@@ -152,6 +167,7 @@ def main():
         ui.Shell.tmux = lambda self,*tail: tmux(*tail)
         assert tmux('-f','/dev/null','new-session','-d','-s','moto','sleep 600').returncode == 0
         terminal = subprocess.Popen(['xterm','-class','XTerm','-e','tmux','-L',server,'attach','-t','moto'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        stimulus = None
         try:
             subprocess.run = remap
             shell = ui.Shell(); app = shell.panel.hermes
@@ -160,15 +176,42 @@ def main():
             shell.panel.voice_backend.CONFIG = config/'groq.json'
             app.home()
             quiet_until = None
+            acoustic_phase = 'initial'
+            acoustic_due = 0
+            acoustic_started = time.monotonic()
             deadline = time.monotonic()+240
             while time.monotonic() < deadline:
                 shell.root.update(); time.sleep(.005)
                 if failures: raise RuntimeError('Chain failed at '+repr(failures)+'; events='+repr(events))
                 if 'wake_checked' in events and 'wake' not in events and app.notice == 'Diga “Olá Hermes”':
                     if 'rejected_wake_restored' not in phases: phases.append('rejected_wake_restored')
+                if args.physical_audio:
+                    now = time.monotonic()
+                    if stimulus and stimulus.poll() is not None and stimulus.returncode:
+                        raise RuntimeError('Acoustic stimulus playback failed')
+                    if acoustic_phase in ('wait_negative','wait_wake') and now-acoustic_started > 30:
+                        metrics = {}
+                        for p in (folder/'runtime/speech.json', config/'hermes-voice-diagnostic.json'):
+                            if p.exists(): metrics[p.name] = json.loads(p.read_text())
+                        raise RuntimeError('Acoustic stimulus was not handled: '+acoustic_phase+'; safe metrics='+repr(metrics)+'; speech decisions='+repr(speech_decisions[-4:]))
+                    if acoustic_phase == 'initial' and args.activation == 'wake-word' and 'wake' in listening_modes:
+                        acoustic_phase, acoustic_due = ('play_negative' if args.physical_negative_first else 'play_wake'), now+.8
+                    elif acoustic_phase == 'wait_negative':
+                        if activations: raise RuntimeError('Negative acoustic stimulus activated the assistant')
+                        if 'rejected_wake_restored' in phases and stimulus.poll() is not None:
+                            acoustic_phase, acoustic_due = 'play_wake', now+.8
+                    if (acoustic_phase in ('initial','wait_wake') and app.awake and app.notice == 'Pode falar'
+                            and not (app.pending or app.transcribing or app.speech_active)):
+                        acoustic_phase, acoustic_due = 'play_question', now+.8
+                    if acoustic_phase.startswith('play_') and now >= acoustic_due:
+                        name = acoustic_phase.removeprefix('play_')
+                        stimulus = subprocess.Popen([physical_tools['aplay'],'-q','-D','default',str(folder/(name+'.wav'))],
+                                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+                        acoustic_phase = 'wait_'+name
+                        acoustic_started = now
                 # Reader events precede Tk delivery. Wait for the UI to apply
                 # the second spoken result and the newly rearmed listener.
-                required_listens = 2 if args.activation=='app-open' else 4
+                required_listens = 2 if args.activation=='app-open' else (3 if args.physical_audio and not args.physical_negative_first else 4)
                 if (events.count('spoken') >= 2 and events.count('voice_listening') >= required_listens
                         and app.awake and not (app.pending or app.transcribing or app.speech_active)
                         and app.notice == 'Pode falar'):
@@ -177,26 +220,31 @@ def main():
                 if commands.count('transcribe') > 1 or commands.count('send') > 1:
                     raise RuntimeError('Unsolicited turn during rearmed idle observation')
             else: raise RuntimeError('Chain timed out; event names='+repr(events)+'; commands='+repr(commands))
-            if args.activation=='wake-word': assert 'rejected_wake_restored' in phases
+            if args.activation=='wake-word' and (not args.physical_audio or args.physical_negative_first): assert 'rejected_wake_restored' in phases
             assert activations == ['app_open' if args.activation=='app-open' else 'wake_word']
             for name in ('connected','wake','utterance','transcript','reply'): assert name in events, name
             assert events.index('wake') < events.index('utterance') < events.index('transcript') < events.index('reply')
             assert commands.count('transcribe') == 1 and commands.count('send') == 1
             assert app.awake and not (app.pending or app.transcribing or app.speech_active)
             assert app.notice == 'Pode falar'
-            counts = [int(n) for n in (folder/'playback-counts').read_text().splitlines()]
+            counts = played_counts if args.physical_audio else [int(n) for n in (folder/'playback-counts').read_text().splitlines()]
             assert len(counts) == 2 and all(n > 0 for n in counts)
             speech = json.loads((config/'hermes-speech-diagnostic.json').read_text())
             assert speech['outcome'] == 'completed' and speech['bytes'] == counts[-1]
+            negative_used = args.activation=='wake-word' and (not args.physical_audio or args.physical_negative_first)
             print(json.dumps({'passed':True,'live_services':['Groq','Hermes','Edge'],
                 'transcript_checked':args.expected_transcript is not None,
-                'synthetic_microphone':True,'synthetic_speaker':True,'activation':args.activation,
-                'negative_wake_restored':'rejected_wake_restored' in phases,
+                'synthetic_microphone':not args.physical_audio,'synthetic_speaker':not args.physical_audio,
+                'physical_audio':args.physical_audio,'activation':args.activation,
+                'negative_stimulus_used':negative_used,
+                'negative_wake_restored':negative_used and 'rejected_wake_restored' in phases,
                 'postwake_transcriptions':1,'agent_turns':1,'audio_bytes':counts,
                 'speech_sample_rate':speech['sample_rate'],'largest_reply_chunk':speech['largest_chunk'],
                 'rearmed':True,'idle_without_extra_turn_seconds':args.idle_seconds}),flush=True)
         finally:
             subprocess.run = real_run
+            if stimulus and stimulus.poll() is None:
+                stimulus.terminate();stimulus.wait(timeout=5)
             if shell:
                 children = [w.process for w in (app.worker,app.face_worker,app.listener) if w and w.process]
                 app.close(); shell.quick_voice.close()
@@ -212,6 +260,6 @@ def main():
 
 
 if __name__ == '__main__':
-    if len(sys.argv) == 3 and sys.argv[1] == '--fake-capture': fake_capture(Path(sys.argv[2]))
-    elif len(sys.argv) == 3 and sys.argv[1] == '--fake-playback': fake_playback(Path(sys.argv[2]))
+    if len(sys.argv) >= 3 and sys.argv[1] == '--fake-capture': fake_capture(Path(sys.argv[2]))
+    elif len(sys.argv) >= 3 and sys.argv[1] == '--fake-playback': fake_playback(Path(sys.argv[2]))
     else: main()

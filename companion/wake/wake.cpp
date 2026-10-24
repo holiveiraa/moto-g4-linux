@@ -41,11 +41,19 @@ int main(int argc, char **argv) {
         std::vector<float> pcm(n);
         for (uint32_t i = 0; i < n; ++i)
             pcm[i] = static_cast<int16_t>(uint16_t(raw[2*i]) | uint16_t(raw[2*i+1]) << 8) / 32768.0f;
+        // Only Silero-verified speech reaches this recognizer in the listener.
+        // Normalize its peak for quiet microphones, with bounded gain. This
+        // does not amplify input before VAD or change the activation policy.
+        float peak = 0;
+        for (float value : pcm) peak = std::max(peak, std::abs(value));
+        const float gain = peak > 0 ? std::min(12.0f, 0.9f/peak) : 1.0f;
+        for (float &value : pcm) value *= gain;
         auto p = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
         p.n_threads = 4;
         p.language = "pt";
         p.translate = false;
         p.no_context = true;
+        p.initial_prompt = "Hermes."; // Proper-name spelling hint, not a forced phrase.
         p.no_timestamps = true;
         p.single_segment = true;
         p.print_progress = false;

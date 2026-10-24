@@ -25,8 +25,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-const MODEL: &str = "/usr/local/share/moto-hermes/ggml-tiny-q5_1.bin";
-const MODEL_SHA: &str = "818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7";
+const MODEL: &str = "/usr/local/share/moto-hermes/ggml-base-q5_1.bin";
+const MODEL_SHA: &str = "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898";
 const VAD_MODEL: &str = "/usr/local/share/moto-hermes/ggml-silero-v6.2.0.bin";
 const VAD_SHA: &str = "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987";
 const VAD: Error = Error("Detecção local de fala indisponível. Atualize moto-vad e o modelo Silero; nenhum áudio foi enviado.");
@@ -241,20 +241,25 @@ impl Drop for Private {
     }
 }
 fn helper(control: &Shared, desired: Desired) -> Result<Process> {
-    let metadata = fs::metadata(MODEL).map_err(|_| LOCAL)?;
-    if !metadata.is_file() || metadata.len() > 40 * 1024 * 1024 {
+    let model = std::env::var_os("MOTO_HERMES_WAKE_MODEL")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| MODEL.into());
+    let binary = std::env::var_os("MOTO_HERMES_WAKE_BINARY")
+        .unwrap_or_else(|| "/usr/local/bin/moto-wake".into());
+    let metadata = fs::metadata(&model).map_err(|_| LOCAL)?;
+    if !metadata.is_file() || metadata.len() > 80 * 1024 * 1024 {
         return Err(LOCAL);
     }
     let check = Command::new("sha256sum")
-        .arg(MODEL)
+        .arg(&model)
         .stderr(Stdio::null())
         .output()
         .map_err(|_| LOCAL)?;
     if !check.status.success() || !String::from_utf8_lossy(&check.stdout).starts_with(MODEL_SHA) {
         return Err(LOCAL);
     }
-    let mut cmd = Command::new("/usr/local/bin/moto-wake");
-    cmd.args(["--model", MODEL]);
+    let mut cmd = Command::new(binary);
+    cmd.arg("--model").arg(model);
     let mut process = Process::spawn(cmd, None)?;
     if process.line(control, desired, 25)?["ready"] != true {
         return Err(LOCAL);
@@ -469,6 +474,7 @@ fn capture_turn(
                     }
                     // Stop and join local capture BEFORE acknowledgment/playback.
                     drop(capture);
+                    *wake = None; // Release the wake model during conversation.
                     emit(json!({"event":"wake","voice_epoch":desired.epoch,"source":"wake_word"}));
                     return Ok(());
                 }

@@ -165,9 +165,12 @@ recognition and playback processes. Dictation keeps its UTF-8/no-Enter contract.
 The accepted interaction uses local activation and automatic half duplex:
 
 1. While the app is open and connected, WebRTC VAD filters native 48 kHz frames.
-2. A pinned multilingual Whisper tiny q5_1 helper checks bounded speech locally
+2. Silero verifies candidate speech; a pinned multilingual Whisper base q5_1
+   helper checks it locally
    for the whole normalized phrase **Olá Hermes** with probability/no-speech
-   thresholds. It receives no forced phrase or previous transcript prompt.
+   thresholds. It receives only a proper-name spelling hint, never a forced
+   phrase or previous transcript prompt. Repetitions of only the wake phrase
+   count as one activation. Its model is released after activation.
 3. The activation recording is discarded, including any extra command spoken
    in that same utterance. **Nothing from standby is uploaded to Groq.**
 4. After spoken acknowledgment, automatic end-of-speech emits a private bounded

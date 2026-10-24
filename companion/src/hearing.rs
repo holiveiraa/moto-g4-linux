@@ -71,13 +71,22 @@ pub fn normalized(text: &str) -> String {
         .join(" ")
 }
 fn wake_threshold(result: &Value) -> Option<f64> {
-    // One measured tiny-model phonetic variant, never broad fuzzy matching.
+    // Whole wake phrases only, including a user repeating the wake phrase
+    // before acknowledgment. Never accept a substring of another utterance.
     let phrase = normalized(result["text"].as_str().unwrap_or(""));
-    match phrase.as_str() {
-        "ola hermes" | "ola ermes" => Some(0.40),
-        "ula hermes" => Some(0.45),
-        _ => None,
+    let words: Vec<_> = phrase.split_whitespace().collect();
+    if words.is_empty() || !words.len().is_multiple_of(2) {
+        return None;
     }
+    let mut threshold = 0.40f64;
+    for pair in words.as_chunks::<2>().0 {
+        match (pair[0], pair[1]) {
+            ("ola", "hermes" | "ermes") => (),
+            ("ula", "hermes") => threshold = 0.45,
+            _ => return None,
+        }
+    }
+    Some(threshold)
 }
 pub fn valid_wake(result: &Value) -> bool {
     let Some(threshold) = wake_threshold(result) else {

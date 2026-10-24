@@ -36,14 +36,17 @@ def main():
     try:
         assert receive() == {'ready':True}
         noise = array.array('h', (24 if i % 2 else -24 for i in range(32000))).tobytes()
-        for pcm, expected in ((bytes(64000),False),(noise,False),(speech,True),(bytes(64000),False)):
+        samples = array.array('h', speech)
+        peak = max((abs(s) for s in samples), default=1) or 1
+        quiet_speech = array.array('h', (round(s*1000/peak) for s in samples)).tobytes()
+        for pcm, expected in ((bytes(64000),False),(noise,False),(speech,True),(quiet_speech,True),(bytes(64000),False)):
             process.stdin.write(struct.pack('<I',len(pcm)//2)+pcm);process.stdin.flush()
             decision = receive()
             assert set(decision) == {'accepted','speech_ms','max_run_ms','milliseconds'}
             assert decision['accepted'] is expected, decision
             assert 0 <= decision['max_run_ms'] <= decision['speech_ms'] <= 51000
         process.stdin.close(); assert process.wait(timeout=5) == 0
-        print('PASS: neural VAD rejects silence/noise, accepts known speech and resets between packets; no audio or transcript output.')
+        print('PASS: neural VAD rejects silence/noise, accepts normal/quiet known speech and resets between packets; no audio or transcript output.')
     finally:
         if process.poll() is None: process.kill();process.wait(timeout=5)
 

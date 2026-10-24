@@ -53,11 +53,12 @@ em Linux a partir do fonte atual. Não representam uma conversa real já validad
   app. O cliente verifica a VPN e restringe HTTP/WS a ela, sem mudar o servidor.
 
 **Estado experimental:** instalado no Moto de referência. Groq → Hermes → Edge
-passou com serviços reais; uma pergunta sintética reproduzida acusticamente
-também passou pelo microfone e alto-falante físicos, após ativação simulada.
-**A ativação com a voz do dono falhou nas três tentativas de aceitação e segue
-em investigação.** Conversa completa com o dono e calor/autonomia ainda precisam
-de aceitação. [Resultados e limites](docs/status.md#physical-wake-diagnosis-and-capture-filtering--23-october).
+passou com serviços reais. O modelo base atual passou uma ativação e uma pergunta
+sintéticas reproduzidas pelo alto-falante e captadas pelo microfone, seguidas de
+60 segundos na escuta sem novo envio. Os testes anteriores com a voz do dono
+falharam no modelo tiny; a aceitação do modelo novo com essa voz, calor e
+autonomia ainda precisam de verificação.
+[Resultados e limites](docs/status.md#acoustic-wake-model-correction--24-october).
 
 ## Configure os dois lados
 

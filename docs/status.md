@@ -454,6 +454,46 @@ turns begin only after activation, with capture paused throughout playback.
   Only the owner's explicit app-opening preference was then changed to wait
   for local activation. No server deployment or Umbrel administration occurred.
 
+## Acoustic wake-model correction — 24 October
+
+After the noise-loop correction, the owner still could not activate the app.
+The latest local decision showed a strong, unclipped capture but a phrase
+mismatch from the tiny recognizer. An acoustic comparison reproduced the
+mismatch; peak gain and full context alone did not fix tiny. Multilingual base
+q5_1 with the proper-name hint `Hermes.` recognized the known acoustic wake
+phrase at roughly 2.9 seconds of inference on the Moto. The continuous flow
+also exposed low-amplitude speech rejected before recognition; the two local
+model inputs now use bounded peak normalization, retaining raw WebRTC/noise-floor
+measurements. No standby audio is uploaded.
+
+Current files use the pinned 59,707,625-byte base model, release the wake
+recognizer after activation, and accept repetitions of only the wake phrase
+without accepting a substring of another request. The existing confidence and
+no-speech thresholds were retained. This replaces the wake model, not the
+Hermes conversation/profile or server setup.
+
+- **57 host Rust tests**, format/Clippy and **124 offline Python regressions**
+  passed, along with matching native fixtures and the isolated fullscreen review.
+- Native Silero review covers ordinary and quiet known speech, silence/noise
+  rejection, and reset between packets.
+- The opt-in **physical wake-word chain** passed with the actual microphone and
+  speaker: a supplied known wake phrase, spoken acknowledgment, an exact known
+  question, one Groq transcription/agent turn, complete Edge playback, and
+  **60 seconds of rearmed listening without an extra request**.
+- This acoustic pass starts directly with the wake phrase. A separate
+  negative-first acoustic stress sequence did not consistently activate in the
+  observed room and is exposed as `--physical-negative-first`; the result must
+  not be presented as a negative-first pass. A separate continuous-capture local
+  probe rejected its non-wake phrase and accepted its wake phrase.
+- Owner-voice acceptance and noise robustness remain physical acceptance gates;
+  synthetic acoustic speech is not the owner's voice. Heat/battery remain unmeasured.
+
+The installed Rust core is 3,559,368 bytes, SHA256
+`a195dc062c88c53ccd02b4c4bc53ff9ac121b72ba209c174a3cefca120b631d0`.
+The core, wake helper, speech verifier and base model form one guarded userspace
+update. Configuration, current conversation and tmux were preserved; no Umbrel
+host/runtime changes or new cloud wake fallback were made.
+
 ## Distribution maturity
 
 The repository is an **experimental source port with an agent-assisted workflow**.

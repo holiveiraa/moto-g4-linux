@@ -99,6 +99,17 @@ it to the agent and reports no returned words. Without this option, a pass
 establishes protocol flow, not recognition of the intended sentence. This review
 replaces microphone and speaker; it does not prove physical activation.
 
+Add **`--physical-audio --activation wake-word --idle-seconds 60`** for the
+explicit acoustic review. Close the production voice app first. In its private
+Xvfb/tmux session, the review uses the real microphone/speaker, plays the supplied
+wake phrase and requires
+activation, then plays the known question after acknowledgment. It checks the
+exact transcript, spoken reply and rearmed idle period. No recording is exported.
+This plays synthetic stimuli in the room; it does not establish owner-voice
+acceptance. `--physical-negative-first` separately exercises rejection followed
+by activation; its result is reported explicitly. Staged wake helpers/models can be selected with the local review
+overrides described in [setup](../docs/hermes-setup.md#local-activation-stays-at-three-dots).
+
 Use `--activation app-open` to exercise the opted-in opening gesture instead
 of the local wake recognizer. This verifies the actual GUI → listener activation,
 spoken acknowledgment, question, reply and rearming. Its capture fixture starts

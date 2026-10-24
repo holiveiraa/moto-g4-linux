@@ -52,6 +52,22 @@ fn wake_requires_the_whole_phrase_speech_and_probability() {
         assert!(!hearing::valid_wake(&value));
     }
 }
+
+#[test]
+fn repeated_wake_words_are_one_activation_but_other_words_remain_rejected() {
+    assert!(hearing::valid_wake(
+        &json!({"text":"Olá Hermes. Olá Hermes!","probability":0.7,"no_speech":0.01})
+    ));
+    for text in [
+        "Olá Maria. Olá Hermes",
+        "Olá Hermes pesquise",
+        "Olá Hermes e Olá Hermes",
+    ] {
+        assert!(!hearing::valid_wake(
+            &json!({"text":text,"probability":0.9,"no_speech":0.01})
+        ));
+    }
+}
 #[test]
 fn commands_are_exact_utterances_not_substrings_in_a_request() {
     assert_eq!(hearing::action("Nova conversa!"), Some("new_session"));

@@ -6,9 +6,10 @@ terminal. Este roteiro configura a conexão; a instalação do Linux e o build
 do app são etapas anteriores, descritas nos guias vinculados abaixo.
 
 **Estado:** experimental, instalado no Moto XT1640 de referência. O fluxo
-completo passou com Groq, Hermes e Edge reais, usando microfone/saída sintéticos
-em uma conversa de teste separada. A sua voz, o microfone/alto-falante físicos
-e a ergonomia ainda precisam de validação. Não há instalador universal.
+completo passou com Groq, Hermes e Edge reais, incluindo a ativação e uma pergunta
+sintéticas reproduzidas acusticamente pelo alto-falante e captadas pelo microfone.
+Depois da resposta, ficou 60 segundos na escuta sem novo envio. Sua voz e a
+robustez no seu ambiente ainda precisam de validação. Não há instalador universal.
 
 ## 1. Confira o que você precisa
 
@@ -122,6 +123,9 @@ abrir** desmarcado. Depois da ativação, converse sem repetir a frase a cada
 pergunta. Sem fala, ele permanece quieto na escuta. O cliente verifica cada
 candidato de fala localmente com Silero antes de enviá-lo à Groq; o runtime,
 `moto-vad` e o modelo precisam estar na mesma instalação atualizada.
+Para a ativação atual, instale também o `moto-wake` correspondente e o modelo
+multilíngue `ggml-base-q5_1.bin`; apenas o modelo tiny antigo não atende ao novo
+runtime. O build e os destinos estão no [guia técnico](hermes-setup.md#prepare-a-userspace-installation).
 
 Como alternativa explícita, para começar assim que abrir o bichinho, marque **Começar a conversa ao abrir**
 em **Configurar**. Ao abrir, ele conecta e diz **“Olá! Estou ouvindo.”**; espere a

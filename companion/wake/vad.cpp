@@ -30,6 +30,13 @@ int main(int argc, char **argv) {
         std::vector<float> pcm(n);
         for (uint32_t i = 0; i < n; ++i)
             pcm[i] = static_cast<int16_t>(uint16_t(raw[2*i]) | uint16_t(raw[2*i+1]) << 8) / 32768.0f;
+        // WebRTC/energy endpointing already selected this candidate. Quiet
+        // microphones need bounded level normalization for the neural model;
+        // raw capture/noise-floor measurements remain unchanged in Rust.
+        float peak = 0;
+        for (float value : pcm) peak = std::max(peak, std::abs(value));
+        const float gain = peak > 0 ? std::min(12.0f, 0.9f/peak) : 1.0f;
+        for (float &value : pcm) value *= gain;
         const auto started = std::chrono::steady_clock::now();
         if (!whisper_vad_detect_speech(ctx, pcm.data(), n)) break;
         // Silero's 512-sample windows at 16 kHz. Use the upstream 0.5 speech
