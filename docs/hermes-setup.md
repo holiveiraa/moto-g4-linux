@@ -365,6 +365,15 @@ closed apps do not keep hearing. Screen-off remains backlight blanking, not
 suspend/locking. Voice commands after activation use Groq, so network failures
 can prevent those commands; ×/hardware screen controls remain available.
 
+Blanking pauses the microphone, playback and animation, while keeping the
+network conversation alive to receive an in-flight answer. Waking redraws the
+face from current state instead of leaving a frozen “thinking” caption. A reply
+that completed while blank is retained, not automatically spoken on waking.
+Use **··· → Ouvir última resposta** to hear a known completed answer without
+submitting another agent turn. Legacy reconnect history uses `text` rows;
+canonical `content` rows are supported too. An uncertain task still requires
+the owner's explicit reconciliation before replaying history.
+
 The app retains its dedicated conversation between opens in the chosen profile.
 It does not attach to Telegram. **Nova conversa** intentionally replaces that
 current ID after server confirmation. Authentication persistence is a separate
@@ -431,8 +440,9 @@ review in [Testing](../tests/README.md).
 
 Speech has **no client cutoff for total duration or total PCM bytes**. The
 client receives PCM/control messages concurrently with ALSA playback. It
-does not retain the whole answer. Text is sent in successive pieces targeting
-400 characters at word boundaries; an unbroken token is kept intact. No text
+does not retain the whole answer. The first text piece targets 100 Unicode
+characters to start synthesis sooner; subsequent pieces target 400 characters
+at word boundaries. An unbroken token is kept intact. No text
 is omitted. Each piece gets its own synthesis socket, with one player retained
 across pieces. There can be a synthesis pause at those boundaries; next-piece
 prefetch has not been implemented. The actual mono signed-16 sample rate comes

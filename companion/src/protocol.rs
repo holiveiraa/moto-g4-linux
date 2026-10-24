@@ -3,6 +3,28 @@ use crate::{Error, Result};
 use serde_json::{json, Value};
 pub const MAX_FRAME: usize = 1024 * 1024;
 pub const MAX_TEXT: usize = 20000;
+
+/// History is display-only on reconnect. Legacy rows use `text`; canonical
+/// rows can use `content`. Never select tool/reasoning rows or auto-speak it.
+pub fn history_reply(snapshot: &Value) -> String {
+    snapshot["messages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .rev()
+        .filter(|row| row["role"] == "assistant")
+        .find_map(|row| {
+            row["content"]
+                .as_str()
+                .or_else(|| row["text"].as_str())
+                .filter(|text| !text.trim().is_empty())
+        })
+        .unwrap_or("")
+        .chars()
+        .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
+        .take(MAX_TEXT)
+        .collect()
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Gateway {
     Canonical,

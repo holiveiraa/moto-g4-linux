@@ -21,6 +21,7 @@ use std::{
 use tungstenite::{stream::MaybeTlsStream, Message};
 
 const INPUT_CHARS: usize = 400;
+const FIRST_INPUT_CHARS: usize = 100;
 const WRITE_CHUNK: usize = 65536;
 const CANCELLED: Error = Error("VOICE_CANCELLED: Voz interrompida.");
 const IDLE: Error = Error("VOICE_IDLE_TIMEOUT: A voz ficou 60 segundos sem um novo bloco ou escrita ALSA; a resposta continua em texto.");
@@ -32,7 +33,14 @@ pub fn pieces(text: &str) -> Vec<&str> {
     let mut result = Vec::new();
     let mut rest = text;
     while !rest.is_empty() {
-        let Some((end, _)) = rest.char_indices().nth(INPUT_CHARS) else {
+        // Start synthesis from a short leading phrase instead of waiting for
+        // a whole paragraph. Later pieces keep the existing throughput target.
+        let target = if result.is_empty() {
+            FIRST_INPUT_CHARS
+        } else {
+            INPUT_CHARS
+        };
+        let Some((end, _)) = rest.char_indices().nth(target) else {
             result.push(rest);
             break;
         };

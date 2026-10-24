@@ -155,6 +155,11 @@ validada. Comandos falados após ativação também dependem da transcrição Gr
 O **×** continua disponível se a rede falhar. Apagar a tela interrompe a escuta;
 isso só apaga a luz de fundo, não suspende nem bloqueia o sistema.
 
+Apagar a tela pausa microfone, reprodução e animação, mas preserva a conexão
+que recebe uma tarefa em andamento. Ao acender, o rosto volta ao estado atual.
+Uma resposta concluída com a tela apagada fica guardada; use **··· → Ouvir
+última resposta** para reproduzi-la, sem reenviar a pergunta ao agente.
+
 ## 6. Se algo não funcionar
 
 | Sintoma | Próximo passo |

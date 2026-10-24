@@ -60,6 +60,43 @@ class CaptureOwnership(unittest.TestCase):
 
 
 class CompanionFiles(unittest.TestCase):
+    def test_replaying_a_known_answer_never_submits_another_agent_turn(self):
+        from unittest.mock import Mock
+        app = self.app()
+        app.home = Mock()
+        app.last_reply = 'Known completed answer'
+        app.pending = True
+        app.speak_last()
+        app.worker.send.assert_not_called()
+        app.pending = False
+        app.speak_last()
+        self.assertEqual(app.worker.send.call_args.args[0], {'cmd':'speak','text':'Known completed answer'})
+        self.assertFalse(any(call.args[0]['cmd']=='send' for call in app.worker.send.call_args_list))
+
+    def test_screen_off_keeps_task_delivery_but_stops_audio_and_face(self):
+        from unittest.mock import Mock
+        app = self.app()
+        app.pending = app.awake = True
+        app.face_worker = Mock()
+        network, listener, face = app.worker, app.listener, app.face_worker
+        app.suspend_screen()
+        network.close.assert_not_called()
+        listener.close.assert_not_called()
+        self.assertEqual(listener.send.call_args.args[0]['cmd'], 'pause')
+        face.close.assert_called_once()
+        self.assertIsNone(app.face_worker)
+        self.assertTrue(app.pending and app.awake)
+        network.send.reset_mock()
+        app.p.s.sleeping = True
+        app.event({'event':'reply','text':'completed while blank'})
+        self.assertFalse(app.pending)
+        self.assertEqual(app.last_reply, 'completed while blank')
+        network.send.assert_not_called()
+        app.home = Mock()
+        app.p.s.sleeping = False
+        app.resume_screen()
+        app.home.assert_called_once_with(activate_open=False)
+
     def test_open_activation_is_explicit_once_and_never_starts_a_pending_task(self):
         app = self.app()
         app.open_activation_pending = True

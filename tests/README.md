@@ -68,7 +68,7 @@ and provide an isolated `Xvfb :9 -screen 0 1080x1920x24` session. Keep
 | `review-voice-panel.py` | Fake-key forms, review editing and real UTF-8 PTY paste without Enter |
 | `review-quick-voice.py` | Keyboard microphone lifecycle/cancellation and paste without Enter |
 | `review-tailscale-panel.py` | First-use no-URL/QR state, completion, degraded state and separate SSH check |
-| `review-hermes.py` | Fullscreen animated Rust vector face, hidden keyboard/header, native Text/caret, password-only and optional 2FA forms, no PTY leak and app cleanup with tmux preserved |
+| `review-hermes.py` | Fullscreen face, native Text/caret, login/2FA, blank/wake with network retained, long reply after wake, no unsolicited historical speech, close cleanup and preserved tmux |
 | `review-experience.py` | Themes/preview/revert, direct panel access, native field isolation, accented UTF-8 PTY input and event-driven wake/idle error paths |
 
 The experience review uses an isolated xterm and tmux server, synthetic UX/host

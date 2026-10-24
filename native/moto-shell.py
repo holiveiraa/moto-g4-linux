@@ -592,13 +592,14 @@ class Shell:
             except (OSError, RuntimeError, subprocess.TimeoutExpired):
                 pass
             self.status(False)
+            self.panel.hermes.resume_screen()
 
     def action(self, action):
         if action == 'screen-toggle':
             if self.sleeping:
                 self.wake()
             else:
-                self.panel.hermes.close()
+                self.panel.hermes.suspend_screen()
                 if self.quick_voice.active:
                     self.quick_voice.cancel()
                 if self.panel.voice.recorder.recording:

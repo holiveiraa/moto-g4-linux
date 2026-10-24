@@ -163,14 +163,8 @@ impl Runtime {
         model.token = Some(token);
         self.backend.remember()?;
         // History is shown, never spoken automatically after reconnect.
-        let last = result["messages"]
-            .as_array()
-            .and_then(|messages| messages.iter().rev().find(|m| m["role"] == "assistant"))
-            .and_then(|m| m["content"].as_str())
-            .unwrap_or("");
-        Ok(
-            json!({"event":"connected","pending":model.turn.busy(),"text":last.chars().take(protocol::MAX_TEXT).collect::<String>()}),
-        )
+        let last = protocol::history_reply(&result);
+        Ok(json!({"event":"connected","pending":model.turn.busy(),"text":last}))
     }
     fn token(&self) -> Result<String> {
         self.model

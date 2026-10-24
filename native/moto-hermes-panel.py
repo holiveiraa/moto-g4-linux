@@ -25,6 +25,7 @@ class HermesPanel:
         self.last_reply = self.last_user = self.notice = self.login_password = ''
         self.voice_warning = ''
         self.open_activation_pending = False
+        self.screen_suspended = False
         self.pending = self.connected = self.transcribing = self.speech_active = False
         self.forgetting = self.switching = self.awake = self.face_pending = False
         self.timer = self.rearm_timer = self.scene = None
@@ -35,8 +36,11 @@ class HermesPanel:
     def fullscreen(self):
         return self.active() and self.p.page == 'hermes' and not self.p.s.sleeping
 
-    def home(self):
+    def home(self, activate_open=True):
         p = self.p
+        if p.s.sleeping:
+            return
+        self.screen_suspended = False
         if self.scene:
             self.scene.dispose()
         p.begin('Hermes', 'hermes', immersive=True)
@@ -54,7 +58,7 @@ class HermesPanel:
         elif self.worker is None and not self.forgetting:
             # Explicit app launch is an optional activation gesture. Old
             # configurations keep local wake; reconnect alone never opts in.
-            self.open_activation_pending = backend.settings()['start_on_open'] is True
+            self.open_activation_pending = activate_open and backend.settings()['start_on_open'] is True
             try:
                 self.worker = backend.Worker(p.s.events.put, self.event)
                 self.worker.start()
@@ -73,6 +77,8 @@ class HermesPanel:
                 ('Ver conversa / escrever', self.text), ('Conectar', self.connect),
                 ('Configurar', self.configure), ('Voltar a dormir', self.sleep)]:
             p.button(label, action)
+        if self.last_reply and not self.pending:
+            p.button('Ouvir última resposta', self.speak_last)
         if self.pending:
             p.button('Conferir tarefa pendente', self.acknowledge)
             p.button('Cancelar tarefa', self.cancel)
@@ -134,11 +140,21 @@ class HermesPanel:
         self.rearm_timer = self.p.s.root.after(400, resume)
 
     def say(self, text):
+        if not self.fullscreen():
+            return
         self.voice_warning = ''
         self.pause_listening()
         self.set_status(text if len(text) < 70 else 'Estou falando…', 'speaking')
         self.speech_active = self.command({'cmd':'speak', 'text':text})
         if not self.speech_active: self.resume_after_voice()
+
+    def speak_last(self):
+        if not self.connected or self.pending or self.speech_active or not self.last_reply:
+            return
+        text = self.last_reply
+        self.speech_active = True  # home must not arm capture before playback
+        self.home(activate_open=False)
+        self.say(text)
 
     def voice_event(self, value):
         event = value.get('event')
@@ -206,7 +222,7 @@ class HermesPanel:
             self.last_user = self.last_reply = ''
             if not self.fullscreen(): self.home()
             self.switching = False
-            if self.awake: self.say('Nova conversa. Pode falar.')
+            if self.awake and self.fullscreen(): self.say('Nova conversa. Pode falar.')
             else: self.listen()
         elif event == 'reply':
             self.pending = False
@@ -290,8 +306,33 @@ class HermesPanel:
         if not page.startswith('hermes'): self.close()
         elif page != 'hermes': self.stop_local()
 
+    def suspend_screen(self):
+        if not self.active():
+            return
+        # Blanking is not closing the conversation. Keep network delivery and
+        # the paused listener's activation state; no microphone/player remains.
+        self.screen_suspended = True
+        self.login_password = ''
+        self.open_activation_pending = False
+        self.stop_local()
+        if self.timer is not None:
+            self.p.s.root.after_cancel(self.timer)
+            self.timer = None
+        if self.face_worker:
+            self.face_worker.close()
+            self.face_worker = None
+        self.face_pending = False
+
+    def resume_screen(self):
+        if self.screen_suspended and self.active():
+            if self.p.page == 'hermes' or (self.p.page == 'hermes-login' and self.connected):
+                self.home(activate_open=False)
+            else:
+                self.screen_suspended = False
+
     def close(self, after_stop=None):
         self.stop_local()
+        self.screen_suspended = False
         self.open_activation_pending = False
         self.login_password = ''
         self.voice_warning = ''

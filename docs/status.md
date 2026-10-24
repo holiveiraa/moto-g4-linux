@@ -388,6 +388,39 @@ reopening explicitly activates again.
   see [the concrete architectural comparison](hermes-assistant.md#esp32-reference-check--24-october).
   No new server deployment, Umbrel host access or new Astra review was needed.
 
+## Answer delivery after display blanking — 24 October
+
+The owner confirmed a spoken greeting and a real voice request reaching Hermes,
+but the face stayed “thinking” after the answer was already visible elsewhere.
+Read-only inspection found a completed owned conversation and no surviving
+companion workers behind the frozen face. The answer and transcript were far
+below the existing size budgets; no conversation contents or identifiers are
+published here.
+
+Screen blanking had called the full application-close path. Waking restored
+the backlight without recreating that face, and reconnect history read only
+canonical `content` despite legacy rows using `text`. Blanking now pauses local
+audio/animation while retaining network completion delivery. Waking restores
+the current face, without automatically replaying a historical answer. An
+explicit **Ouvir última resposta** action plays a known completed answer without
+another agent submission. The first TTS piece now targets 100 characters;
+later pieces retain the 400-character target, with exact text preservation.
+
+- **55 Rust tests**, formatting/Clippy and **123 offline Python regressions**
+  passed. All **55 native Rust tests**, **22 companion Python tests** and the
+  isolated Tk/tmux review passed on the Moto. The UI review covers completion
+  both during blanking and after waking, including a long synthetic answer.
+- The linked Groq/Hermes/Edge app-open chain passed with known synthetic speech
+  and an exact transcript check. This is not a claim of a measured universal
+  speech-latency bound; synthesis/network delays still apply.
+- The four matching userspace components were installed with a fresh verified
+  rollback archive and independent readback, preserving configuration and tmux
+  `@0`/`@1`. The core is 3,550,936 bytes, SHA256
+  `3ee2537f94b10c0dc432b81d2866c414257f5338d21bd19e8fcf642a669326ee`.
+- The owner had already confirmed the stranded task was complete. After checking
+  the matching current conversation, the local unknown state was acknowledged
+  explicitly, with no prompt resubmission or server/host administration.
+
 ## Distribution maturity
 
 The repository is an **experimental source port with an agent-assisted workflow**.

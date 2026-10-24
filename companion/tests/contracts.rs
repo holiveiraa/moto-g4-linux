@@ -3,6 +3,28 @@ use moto_hermes::{auth, config::Config, face, protocol, state::Turn, storage};
 use serde_json::json;
 
 #[test]
+fn reconnect_reads_both_history_contracts_without_speaking_tool_rows() {
+    assert_eq!(
+        protocol::history_reply(&json!({"messages":[
+        {"role":"assistant","text":"Legacy answer"},
+        {"role":"assistant","text":"","codex_reasoning_items":["private reasoning"]},
+        {"role":"tool","text":"private tool content"}]})),
+        "Legacy answer"
+    );
+    assert_eq!(
+        protocol::history_reply(
+            &json!({"messages":[{"role":"assistant","content":"Canonical answer"}]})
+        ),
+        "Canonical answer"
+    );
+    let text = "A useful answer with several complete phrases. ".repeat(40);
+    let parts = moto_hermes::speech::pieces(&text);
+    assert!(parts[0].chars().count() <= 100);
+    assert!(parts[1].chars().count() > 100);
+    assert_eq!(parts.concat(), text);
+}
+
+#[test]
 fn app_open_activation_is_a_typed_opt_in_and_old_configs_stay_local() {
     let old: Config =
         serde_json::from_value(json!({"server_url":"https://server.example:18790/"})).unwrap();

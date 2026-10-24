@@ -130,9 +130,25 @@ def main():
             app.forget(); pump(.6)
             assert not cookie.exists() and not app.forgetting and p.page=='hermes-config'
             app.home(); pump(.5)
+            network, listener = app.worker, app.listener
+            app.pending = True
             shell.action('screen-toggle'); pump()
-            assert shell.sleeping and app.worker is None and app.listener is None and app.face_worker is None
-            shell.wake(); shell.close_menu(); pump()
+            assert shell.sleeping and app.worker is network and app.listener is listener and app.face_worker is None
+            app.event({'event':'reply','text':'Completed while the display was blank.'}); pump()
+            assert not app.pending and app.last_reply=='Completed while the display was blank.' and not app.speech_active
+            shell.wake(); pump()
+            assert app.worker is network and app.face_worker is not None and not app.screen_suspended
+            assert app.notice != 'Hermes está pensando…'
+            app.pending = app.awake = True
+            app.set_status('Hermes está pensando…', 'thinking')
+            shell.action('screen-toggle'); pump()
+            shell.wake(); pump()
+            assert app.pending and app.worker is network
+            completed = 'A long synthetic answer after a tool completed. '*120
+            started = time.monotonic()
+            app.event({'event':'reply','text':completed}); pump(.6)
+            assert not app.pending and app.last_reply==completed and time.monotonic()-started<2
+            shell.close_menu(); pump()
             assert tmux('list-windows','-F','#{window_id}').stdout==before
             assert not (sink.read_bytes() if sink.exists() else b'')
             print('PASS: fullscreen animated Rust vector face, hidden keyboard, native Text/caret, password-only + optional 2FA forms, blank/close worker cleanup, preserved tmux and no PTY input leak')
