@@ -24,6 +24,7 @@ class HermesPanel:
         self.state = 'disconnected'
         self.last_reply = self.last_user = self.notice = self.login_password = ''
         self.voice_warning = ''
+        self.open_activation_pending = False
         self.pending = self.connected = self.transcribing = self.speech_active = False
         self.forgetting = self.switching = self.awake = self.face_pending = False
         self.timer = self.rearm_timer = self.scene = None
@@ -51,6 +52,9 @@ class HermesPanel:
         if not backend.CONFIG.exists():
             self.set_status('Primeiro, configure seu Hermes em ···', 'disconnected')
         elif self.worker is None and not self.forgetting:
+            # Explicit app launch is an optional activation gesture. Old
+            # configurations keep local wake; reconnect alone never opts in.
+            self.open_activation_pending = backend.settings()['start_on_open'] is True
             try:
                 self.worker = backend.Worker(p.s.events.put, self.event)
                 self.worker.start()
@@ -115,7 +119,9 @@ class HermesPanel:
                 return
         self.voice_epoch += 1
         try:
-            self.listener.send({'cmd':'conversation' if self.awake else 'wake', 'voice_epoch':self.voice_epoch})
+            command = 'activate' if self.open_activation_pending else ('conversation' if self.awake else 'wake')
+            self.listener.send({'cmd':command, 'voice_epoch':self.voice_epoch})
+            self.open_activation_pending = False
         except RuntimeError:
             self.set_status('A escuta local encerrou. Reabra o app.', 'error')
 
@@ -166,6 +172,7 @@ class HermesPanel:
 
     def sleep(self):
         self.stop_local()
+        self.open_activation_pending = False
         self.awake = False
         self.voice_warning = ''
         if not self.fullscreen(): self.home()
@@ -285,6 +292,7 @@ class HermesPanel:
 
     def close(self, after_stop=None):
         self.stop_local()
+        self.open_activation_pending = False
         self.login_password = ''
         self.voice_warning = ''
         self.connected = self.speech_active = self.switching = self.awake = False
@@ -355,18 +363,21 @@ class HermesPanel:
         ca = p.field('Arquivo CA PEM (opcional)', value['ca_file'] or '')
         speak = tk.BooleanVar(value=value['auto_speak'])
         remember = tk.BooleanVar(value=value['remember_session'])
-        for caption, variable in [('Ler respostas em voz alta', speak), ('Lembrar sessão neste aparelho', remember)]:
+        start = tk.BooleanVar(value=value['start_on_open'])
+        for caption, variable in [('Ler respostas em voz alta', speak), ('Lembrar sessão neste aparelho', remember),
+                ('Começar a conversa ao abrir', start)]:
             tk.Checkbutton(p.body, text=caption, variable=variable, bg=p.theme.BG,
                            fg=p.theme.FG, selectcolor=p.theme.KEY, activebackground=p.theme.BG,
                            font=('DejaVu Sans', -p.u(16))).pack(fill='x', pady=p.u(5))
         p.label('A sessão lembrada é privada, mas não criptografada. A chave Groq é configurada em Voz e áudio.', p.u(14), p.theme.MUTED)
+        p.label('Ao começar pela abertura, o app confirma em voz e envia as falas seguintes à Groq. Desmarcado: espera “Olá Hermes” localmente.', p.u(14), p.theme.MUTED)
         p.note = p.label('', p.u(15), p.theme.MUTED)
         def save():
             try:
                 backend.save_config({'server_url':server.get().strip(), 'user_id':account.get().strip(),
                     'auth_origin':auth_origin.get().strip() or None,
                     'profile':profile.get().strip(), 'ca_file':ca.get().strip() or None,
-                    'auto_speak':speak.get(), 'remember_session':remember.get()})
+                    'auto_speak':speak.get(), 'remember_session':remember.get(), 'start_on_open':start.get()})
             except (OSError, ValueError) as error:
                 p.note.configure(text=str(error)); return
             self.close()

@@ -94,6 +94,12 @@ it to the agent and reports no returned words. Without this option, a pass
 establishes protocol flow, not recognition of the intended sentence. This review
 replaces microphone and speaker; it does not prove physical activation.
 
+Use `--activation app-open` to exercise the opted-in opening gesture instead
+of the local wake recognizer. This verifies the actual GUI → listener activation,
+spoken acknowledgment, question, reply and rearming. Its capture fixture starts
+with the question and must not pretend a wake-word candidate was recognized.
+The default `--activation wake-word` still checks local rejection/acceptance.
+
 `review-hermes-live.py` exercises the actual Tk controller, Rust network worker,
 local VAD/recognizer/model and real Groq → Hermes → Edge services in one chain.
 It replaces only ALSA capture/playback with generated speech and a PCM byte

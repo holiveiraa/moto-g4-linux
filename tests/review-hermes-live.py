@@ -44,10 +44,13 @@ def fake_capture(folder):
         # Repeat each sample: native 48 kHz input, downsampled by the real listener.
         native = array.array('h', (v for sample in pcm for v in (sample,)*3))
         silence(.6); send(native.tobytes()); silence(4)
-    if number == 1:
+    app_open = (folder/'activation').read_text() == 'app-open'
+    if app_open and number == 1:
+        say('question.wav')
+    elif not app_open and number == 1:
         say('negative.wav')
         say('wake.wav')
-    elif number == 2:
+    elif not app_open and number == 2:
         say('question.wav')
     while True: silence(1)
 
@@ -67,6 +70,7 @@ def main():
     parser.add_argument('--question-wav', type=Path, required=True)
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--expected-transcript', help='Known synthetic question text; compare without logging the returned transcript.')
+    parser.add_argument('--activation', choices=('wake-word','app-open'), default='wake-word')
     args = parser.parse_args()
     if not os.environ.get('DISPLAY'):
         parser.error('Start a private Xvfb display first; never use the owner display.')
@@ -89,8 +93,9 @@ def main():
         folder = Path(directory)
         config = folder/'config'; config.mkdir(mode=0o700)
         for original, data in originals.items(): (config/original.name).write_bytes(data)
-        settings = json.loads(originals[source]); settings.update(auto_speak=True, remember_session=True)
+        settings = json.loads(originals[source]); settings.update(auto_speak=True, remember_session=True, start_on_open=args.activation=='app-open')
         (config/source.name).write_text(json.dumps(settings))
+        (folder/'activation').write_text(args.activation)
         # Never copy the production journal/session: this worker creates its own.
         for supplied, name in ((args.negative_wav,'negative.wav'),(args.wake_wav,'wake.wav'),(args.question_wav,'question.wav')):
             shutil.copyfile(supplied, folder/name)
@@ -104,7 +109,7 @@ def main():
         os.environ['MOTO_UX_CONFIG'] = str(folder/'ux.json')
         backend.CONFIG = config/source.name
         backend.BINARY = str(args.binary.resolve(strict=True))
-        commands = []; events = []; failures = []; phases = []
+        commands = []; events = []; failures = []; phases = []; activations = []
         original_worker = backend.Worker
         class ObservedWorker(original_worker):
             # Observe real commands/events, without replacing worker behavior.
@@ -113,6 +118,7 @@ def main():
                 super().send(value)
             def deliver(self, value, generation=None):
                 name = value.get('event')
+                if name == 'wake': activations.append(value.get('source'))
                 if name == 'transcript' and args.expected_transcript is not None:
                     def normalize(text):
                         decomposed = unicodedata.normalize('NFD', text.lower())
@@ -150,11 +156,13 @@ def main():
                     if 'rejected_wake_restored' not in phases: phases.append('rejected_wake_restored')
                 # Reader events precede Tk delivery. Wait for the UI to apply
                 # the second spoken result and the newly rearmed listener.
-                if (events.count('spoken') >= 2 and events.count('voice_listening') >= 4
+                required_listens = 2 if args.activation=='app-open' else 4
+                if (events.count('spoken') >= 2 and events.count('voice_listening') >= required_listens
                         and app.awake and not (app.pending or app.transcribing or app.speech_active)
                         and app.notice == 'Pode falar'): break
             else: raise RuntimeError('Chain timed out; event names='+repr(events)+'; commands='+repr(commands))
-            assert 'rejected_wake_restored' in phases
+            if args.activation=='wake-word': assert 'rejected_wake_restored' in phases
+            assert activations == ['app_open' if args.activation=='app-open' else 'wake_word']
             for name in ('connected','wake','utterance','transcript','reply'): assert name in events, name
             assert events.index('wake') < events.index('utterance') < events.index('transcript') < events.index('reply')
             assert commands.count('transcribe') == 1 and commands.count('send') == 1
@@ -166,7 +174,8 @@ def main():
             assert speech['outcome'] == 'completed' and speech['bytes'] == counts[-1]
             print(json.dumps({'passed':True,'live_services':['Groq','Hermes','Edge'],
                 'transcript_checked':args.expected_transcript is not None,
-                'synthetic_microphone':True,'synthetic_speaker':True,'negative_wake_restored':True,
+                'synthetic_microphone':True,'synthetic_speaker':True,'activation':args.activation,
+                'negative_wake_restored':'rejected_wake_restored' in phases,
                 'postwake_transcriptions':1,'agent_turns':1,'audio_bytes':counts,
                 'speech_sample_rate':speech['sample_rate'],'largest_reply_chunk':speech['largest_chunk'],
                 'rearmed':True}),flush=True)

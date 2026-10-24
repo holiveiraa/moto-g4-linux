@@ -1,6 +1,6 @@
 # Hermes companion app: research and implementation
 
-Research date: **22 October 2026**. Status: **implemented source preview,
+Research updated: **24 October 2026**. Status: **implemented source preview,
 fullscreen voice-pet revision built for ARM64 musl; host/native UI and synthetic wake reviewed; installed on the reference Moto; live voice pending**. This document
 records primary-source research, repository inspection and a focused Astra
 architecture review. The [setup guide](hermes-setup.md) describes the implemented
@@ -53,6 +53,30 @@ gateway, and does not authorize flashing or formatting a phone.
   directory for this preview; pins are in `companion/toolchains.json`.
 
 ## Existing projects
+
+### ESP32 reference check — 24 October
+
+The [M5Stack StackChan](https://github.com/m5stack/StackChan) is the ESP32-S3
+face/robot family described by the owner. Its small MCU is not evidence that a
+general transcription model makes a reliable wake detector. In the current
+[Xiaozhi audio architecture](https://github.com/78/xiaozhi-esp32/blob/main/main/audio/README.md),
+one input engine owns capture, specialized WakeNet/MultiNet detection and VAD;
+output/network queues are independent. [Espressif WakeNet](https://docs.espressif.com/projects/esp-sr/en/latest/esp32s3/wake_word_engine/README.html)
+is a trained keyword detector for supported MCUs, not a drop-in Linux model.
+
+[JARVIS Desk Bot](https://github.com/dreamhunter02/jarvis-desk-bot) demonstrates
+the requested Hermes integration: local activation, an audible acknowledgment,
+server ASR/agent/TTS, and conversation retained until an explicit goodbye.
+The useful lessons are explicit activation/turn states, confirmation, persistent
+conversation and independent bounded audio queues. Its firmware, extra speech
+server and host-service assumptions are not installation instructions for this
+project. No new server deployment or copied ESP firmware is required here.
+
+The Moto additionally offers explicit app-open activation: when opted in, opening
+the fullscreen app starts acknowledgment and the active conversation. It retains
+Groq and the existing protected Hermes/Edge APIs. Local “Olá Hermes” accuracy is
+still a separate, unaccepted capability; opening activation is not reported as
+a successful wake-word test.
 
 | Project | What exists | Fit for this phone |
 | --- | --- | --- |

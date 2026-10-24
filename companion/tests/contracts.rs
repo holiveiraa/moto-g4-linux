@@ -3,6 +3,16 @@ use moto_hermes::{auth, config::Config, face, protocol, state::Turn, storage};
 use serde_json::json;
 
 #[test]
+fn app_open_activation_is_a_typed_opt_in_and_old_configs_stay_local() {
+    let old: Config =
+        serde_json::from_value(json!({"server_url":"https://server.example:18790/"})).unwrap();
+    assert!(!old.start_on_open);
+    let selected: Config = serde_json::from_value(json!({"start_on_open":true})).unwrap();
+    assert!(selected.start_on_open);
+    assert!(serde_json::from_value::<Config>(json!({"start_on_open":"false"})).is_err());
+}
+
+#[test]
 fn production_endpoint_refuses_plaintext_credentials_and_ambiguous_urls() {
     for url in [
         "http://server.example:18789",

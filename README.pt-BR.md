@@ -5,6 +5,11 @@
 # Moto G4 Linux
 
 **Seu Hermes com rosto e voz. Seu terminal Linux sempre à mão.**
+
+Para abrir e já conversar, marque **Começar a conversa ao abrir** na configuração.
+O bichinho conecta, diz “Olá! Estou ouvindo.” e escuta sua pergunta. Fechou o app,
+volta ao terminal. A opção é explícita e fica desmarcada em configurações antigas;
+o reconhecimento local de “Olá Hermes” continua experimental.
 Uma segunda vida para o Moto G4 Plus: um companheiro animado em tela cheia e
 um terminal de verdade, com teclado de toque, abas persistentes, SSH e Tailscale.
 O protótipo usa Alpine Linux, Xorg e xterm/tmux e liga sem um PC.

@@ -60,6 +60,35 @@ class CaptureOwnership(unittest.TestCase):
 
 
 class CompanionFiles(unittest.TestCase):
+    def test_open_activation_is_explicit_once_and_never_starts_a_pending_task(self):
+        app = self.app()
+        app.open_activation_pending = True
+        app.pending = True
+        app.listen()
+        app.listener.send.assert_not_called()
+        app.pending = False
+        app.listen()
+        self.assertEqual(app.listener.send.call_args.args[0]['cmd'], 'activate')
+        self.assertFalse(app.open_activation_pending)
+        app.voice_event({'event':'wake','voice_epoch':app.voice_epoch,'source':'app_open'})
+        self.assertTrue(app.awake)
+        self.assertEqual(app.worker.send.call_args.args[0]['cmd'], 'speak')
+        app.event({'event':'spoken'})
+        self.callbacks.pop()()
+        self.assertEqual(app.listener.send.call_args.args[0]['cmd'], 'conversation')
+        app.sleep()
+        self.assertEqual(app.listener.send.call_args.args[0]['cmd'], 'wake')
+
+    def test_existing_configuration_never_silently_opts_into_open_activation(self):
+        h = module('moto-hermes')
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)/'hermes.json'
+            path.write_text('{"server_url":"https://server.example:18790/"}')
+            self.assertIs(h.settings(path)['start_on_open'], False)
+            h.save_config(dict(h.settings(path),start_on_open=True),path)
+            self.assertIs(h.settings(path)['start_on_open'], True)
+            with self.assertRaises(ValueError): h.save_config(dict(h.settings(path),start_on_open='false'),path)
+
     def test_http_tailnet_candidate_is_saved_but_lan_and_http_dns_are_rejected(self):
         h = module('moto-hermes')
         with tempfile.TemporaryDirectory() as folder:
@@ -74,7 +103,7 @@ class CompanionFiles(unittest.TestCase):
         h = module('moto-hermes')
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder)/'private/hermes.json'
-            value = {'server_url':'https://server.example:18789/', 'auth_origin':None, 'user_id':'0', 'profile':'', 'ca_file':None, 'auto_speak':True, 'remember_session':False}
+            value = {'server_url':'https://server.example:18789/', 'auth_origin':None, 'user_id':'0', 'profile':'', 'ca_file':None, 'auto_speak':True, 'remember_session':False, 'start_on_open':False}
             h.save_config(value, path)
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertEqual(path.parent.stat().st_mode & 0o777, 0o700)

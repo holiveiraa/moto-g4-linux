@@ -14,6 +14,7 @@ pub struct Config {
     pub ca_file: Option<PathBuf>,
     pub auto_speak: bool,
     pub remember_session: bool,
+    pub start_on_open: bool,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -25,6 +26,7 @@ impl Default for Config {
             ca_file: None,
             auto_speak: true,
             remember_session: false,
+            start_on_open: false,
         }
     }
 }

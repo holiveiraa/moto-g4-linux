@@ -117,6 +117,13 @@ do telefone têm permissões restritas; não são um cofre criptografado.
 
 ## 5. Faça a primeira conversa
 
+Para começar assim que abrir o bichinho, marque **Começar a conversa ao abrir**
+em **Configurar**. Ao abrir, ele conecta e diz **“Olá! Estou ouvindo.”**; espere a
+confirmação e faça a pergunta. A partir daí as falas seguem para a Groq e para
+seu Hermes. Essa opção é explícita e vem desmarcada em configurações antigas.
+Ela inicia a conversa pela abertura do app; não significa que a detecção local
+de “Olá Hermes” foi corrigida. Com a opção desmarcada, siga a ativação abaixo.
+
 1. Com o rosto conectado, diga **“Olá Hermes”** sozinho.
 2. Espere **“Olá! Estou ouvindo.”**. A frase de ativação inteira é descartada;
    faça o pedido depois dessa confirmação.

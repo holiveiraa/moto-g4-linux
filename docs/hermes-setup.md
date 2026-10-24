@@ -131,7 +131,10 @@ Whisper tiny model. The activation clip is discarded, never uploaded. After
 acknowledgment, each utterance is sent to Groq when speech ends automatically.
 Replies reach the server's online Edge service after its provider verdict is
 confirmed. Both normal transcription and speech synthesis require internet.
-Missing local components produce an explicit error, with no cloud wake fallback.
+Missing local recognition components produce an explicit error in wake-word
+mode, with no cloud wake fallback. Explicit app-open activation starts the
+conversation without running the wake recognizer; it does not transcribe
+standby audio under the guise of local detection.
 
 ## Build from public source
 
@@ -267,6 +270,14 @@ optional; the terminal works even before the Rust binary or server is configured
    connect. Passwords and 2FA codes are entered only on the phone's private
    fields, never in chat, terminal arguments, examples or diagnostic logs.
 
+For conversation immediately after launching, enable **Começar a conversa ao
+abrir** (`start_on_open: true`). Opening the fullscreen app then counts as the
+activation gesture: after authentication and a check for unfinished work, it
+says **Olá! Estou ouvindo.** and captures the next utterance for Groq. No local
+wake inference is needed to start this mode. Old/unspecified settings remain
+`false`; an update never silently opts an existing installation into cloud
+transcription on launch. Reconnecting alone does not activate it.
+
 The [example JSON](../companion/hermes.example.json) documents the schema for
 agent-assisted setup. The GUI saves `/root/.config/moto-linux/hermes.json`
 atomically with file mode 0600 and parent mode 0700. The example is not an
@@ -322,9 +333,13 @@ own authentication. The app does not copy VPN state or change SSH users.
 
 ## Talk and return to the terminal
 
-1. Open **Painel → Hermes**. Once connected, the face waits for **Olá Hermes**.
-2. Say the phrase alone, then wait for **Olá! Estou ouvindo.** The entire
-   activation clip is discarded; say your actual request after acknowledgment.
+1. Open **Painel → Hermes**. With **Começar a conversa ao abrir** enabled, it
+   connects and speaks **Olá! Estou ouvindo.** automatically. Wait for that
+   acknowledgment, then ask your question.
+2. With that option disabled, the face instead waits for **Olá Hermes**.
+   Say the phrase alone and wait for the acknowledgment. That activation clip
+   is discarded; the actual request must follow it. This local recognition
+   remains experimental; opening activation does not establish its accuracy.
 3. Speak normally. After approximately 700 ms of detected silence, the app
    transcribes the bounded utterance (up to 45 seconds), asks your Hermes and
    speaks its reply. It automatically listens again, with no button or repeated
@@ -338,6 +353,10 @@ own authentication. The app does not copy VPN state or change SSH users.
    / **Voltar ao terminal** to close the app. The × also exits. Long press or ···
    opens secondary controls, setup and text/history. Exact commands are handled
    before the LLM; a sentence merely mentioning “nova conversa” stays a request.
+
+After **Voltar a dormir**, opening activation is not repeated just because the
+face redraws or reconnects. Close and explicitly reopen the app to start by
+launch again. No activity continues after closing it.
 
 Capture pauses while transcribing, waiting for Hermes and speaking. Listening
 resumes 400 ms after playback completion; interruption over the speaker/AEC is

@@ -355,6 +355,39 @@ automatically close its screen.
   `b7f0fb6389c8eba8ea4fabd63f53694d6092193c159a16c9e3cf69cb7dee793d`.
   No server-runtime or Umbrel host configuration was accessed or changed.
 
+## Conversation activated by opening the app — 24 October
+
+An explicit **Começar a conversa ao abrir** setting (`start_on_open: true`)
+allows the owner to open the fullscreen companion, hear acknowledgment and
+start talking without first passing the experimental local recognizer. The
+reference Moto has this option enabled. Missing/old settings remain false;
+the app never silently opts other installations into transcription on opening.
+Reconnection and face redraw do not count as a new opening. Unfinished work
+blocks activation. **Voltar a dormir** returns to local wake mode; closing and
+reopening explicitly activates again.
+
+- **54 Rust tests**, formatting/Clippy and **121 offline Python regressions**
+  passed. All **54 Rust tests**, **20 companion Python tests** and the isolated
+  native Tk/tmux review passed on the reference phone.
+- Opening activation passed the linked real-service review. A separate run
+  used the real capture/playback devices and a known question played
+  acoustically: Groq recognized the expected sentence, Hermes answered, ALSA
+  completed acknowledgment/reply and the app rearmed. The run consumed
+  153,216/324,864 PCM bytes at 24 kHz, with largest reply message 200,448 bytes.
+  The activation source was explicitly `app_open`, not simulated recognition.
+- The three matching components and the opted-in configuration were installed
+  with a fresh verified rollback archive and independent readback. Connection
+  settings and tmux `@0`/`@1` were preserved. The core is 3,550,232 bytes, SHA256
+  `7fae21faa43bde63aaf6bf9d2f135b6b785cc366e4db3c7f48f5b05ae3ec018c`.
+- Local “Olá Hermes” accuracy remains unresolved. An owner calibration again
+  produced a mismatched local transcript; the owner reported no audible phrase
+  on local replay. No further owner repetitions were requested. Nominal ALSA
+  completion/loopback is not proof that the owner heard speech. Complete
+  conversation with that owner's voice and hearing still needs acceptance.
+- Research was refreshed against primary Xiaozhi, StackChan and JARVIS sources;
+  see [the concrete architectural comparison](hermes-assistant.md#esp32-reference-check--24-october).
+  No new server deployment, Umbrel host access or new Astra review was needed.
+
 ## Distribution maturity
 
 The repository is an **experimental source port with an agent-assisted workflow**.

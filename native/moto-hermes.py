@@ -13,7 +13,8 @@ from urllib.parse import urlsplit
 CONFIG = Path('/root/.config/moto-linux/hermes.json')
 BINARY = '/usr/local/bin/moto-hermes'
 DEFAULTS = {'server_url':'https://server.example:18790/', 'user_id':'0', 'profile':'',
-            'auth_origin':None, 'ca_file':None, 'auto_speak':True, 'remember_session':False}
+            'auth_origin':None, 'ca_file':None, 'auto_speak':True, 'remember_session':False,
+            'start_on_open':False}
 
 
 def cleanup_listener(pid, run=Path('/run')):
@@ -42,6 +43,8 @@ def settings(path=None):
 
 def save_config(value, path=None):
     value = {key:value.get(key, default) for key, default in DEFAULTS.items()}
+    if type(value['start_on_open']) is not bool:
+        raise ValueError('Escolha se deseja iniciar a conversa ao abrir o app.')
     parsed = urlsplit(value['server_url'])
     try:
         parsed.port

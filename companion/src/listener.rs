@@ -386,7 +386,7 @@ fn capture_turn(
                     }
                     // Stop and join local capture BEFORE acknowledgment/playback.
                     drop(capture);
-                    emit(json!({"event":"wake","voice_epoch":desired.epoch}));
+                    emit(json!({"event":"wake","voice_epoch":desired.epoch,"source":"wake_word"}));
                     return Ok(());
                 }
                 // A rejected candidate ends checking, not the listening turn.
@@ -484,6 +484,14 @@ pub fn run(device: &str, emit: Emit) -> Result<()> {
         let epoch = value["voice_epoch"].as_u64().unwrap_or(0);
         c.desired.epoch = epoch;
         match command {
+            "activate" => {
+                // Only the local GUI's explicitly opted-in app launch sends
+                // this command. Pause until acknowledgment finishes; never
+                // record its playback or need a recognizer to open a turn.
+                c.awake = true;
+                c.desired.mode = Mode::Paused;
+                emit(json!({"event":"wake","voice_epoch":epoch,"source":"app_open"}));
+            }
             "wake" => {
                 c.awake = false;
                 c.desired.mode = Mode::Wake;
