@@ -246,11 +246,22 @@ class CompanionFiles(unittest.TestCase):
         app.worker = Mock()
         return app
 
-    def test_wake_audio_is_never_uploaded_and_replies_rearm_without_touch(self):
+    def test_groq_checks_wake_before_any_agent_submission_and_replies_rearm(self):
         app = self.app()
         app.voice_event({'event':'utterance','voice_epoch':0,'path':'/fixture/prewake.wav'})
         app.worker.send.assert_not_called()
-        app.voice_event({'event':'wake','voice_epoch':0})
+        app.voice_event({'event':'utterance','mode':'wake','voice_epoch':0,'path':'/fixture/wake.wav'})
+        self.assertTrue(app.transcribing)
+        self.assertEqual(app.worker.send.call_args.args[0], {'cmd':'transcribe','scope':'wake','epoch':app.epoch,'path':'/fixture/wake.wav'})
+        app.event({'event':'wake_transcript','epoch':app.epoch,'accepted':False,'characters':12})
+        self.assertFalse(app.awake or app.transcribing)
+        self.assertEqual(app.listener.send.call_args.args[0]['cmd'],'wake')
+        epoch = app.voice_epoch
+        app.voice_event({'event':'utterance','mode':'wake','voice_epoch':epoch,'path':'/fixture/second-wake.wav'})
+        app.event({'event':'wake_transcript','epoch':app.epoch,'accepted':True,'characters':10})
+        self.assertEqual(app.listener.send.call_args.args[0]['cmd'],'accept_wake')
+        self.assertFalse(any(call.args[0]['cmd']=='send' for call in app.worker.send.call_args_list))
+        app.voice_event({'event':'wake','voice_epoch':app.voice_epoch,'source':'groq'})
         self.assertTrue(app.awake and app.speech_active)
         self.assertEqual(app.worker.send.call_args.args[0]['cmd'], 'speak')
         app.event({'event':'spoken'})
@@ -261,25 +272,49 @@ class CompanionFiles(unittest.TestCase):
         self.assertFalse(app.transcribing)
         app.voice_event({'event':'utterance','voice_epoch':epoch,'path':'/fixture/current.wav'})
         self.assertTrue(app.transcribing)
-        self.assertEqual(app.worker.send.call_args.args[0], {'cmd':'transcribe','epoch':app.epoch,'path':'/fixture/current.wav'})
+        self.assertEqual(app.worker.send.call_args.args[0], {'cmd':'transcribe','scope':'conversation','epoch':app.epoch,'path':'/fixture/current.wav'})
+
+    def test_groq_wake_reply_from_an_abandoned_screen_cannot_activate(self):
+        app = self.app()
+        app.voice_event({'event':'utterance','mode':'wake','voice_epoch':0,'path':'/fixture/wake.wav'})
+        app.epoch += 1
+        app.listener.send.reset_mock()
+        app.event({'event':'wake_transcript','epoch':app.epoch-1,'accepted':True,'characters':10})
+        app.listener.send.assert_not_called()
+        self.assertFalse(app.awake)
+
+    def test_conversation_transcript_cannot_be_used_as_a_wake_result(self):
+        app = self.app()
+        app.transcribing = True
+        app.transcription_mode = 'wake'
+        app.event({'event':'transcript','epoch':app.epoch,'text':'private prewake words'})
+        self.assertTrue(app.transcribing)
+        app.worker.send.assert_not_called()
+
+    def test_groq_failure_is_visible_without_an_automatic_upload_retry(self):
+        app = self.app()
+        app.transcribing = True
+        app.transcription_mode = 'wake'
+        app.event({'event':'error','operation':'transcribe','epoch':app.epoch,'pending':False,'text':'Groq indisponível'})
+        self.callbacks.pop()()
+        app.voice_event({'event':'voice_listening','voice_epoch':app.voice_epoch,'mode':'wake'})
+        self.assertEqual(app.notice,'Groq indisponível')
+        app.worker.send.assert_not_called()
+        self.assertFalse(app.awake)
 
     def test_rejected_wake_restores_standby_and_diagnostic_is_private_without_text(self):
         app = self.app()
         with tempfile.TemporaryDirectory() as folder, patch.object(self.h.backend, 'CONFIG', Path(folder)/'hermes.json'):
-            app.voice_event({'event':'wake_checking','voice_epoch':0})
-            self.assertEqual(app.notice, 'Diga “Olá Hermes”')
-            app.voice_event({'event':'wake_checked','voice_epoch':0,'decision':{
-                'accepted':False,'phrase_match':True,'probability':.3,'no_speech':.01,
-                'milliseconds':1800,'capture_ms':1200,'peak':3000,'rms':200,'clipped_samples':0,'text':'private ambient words','audio':'private audio'}})
-            app.voice_event({'event':'voice_listening','voice_epoch':0,'mode':'wake'})
+            app.transcribing = True
+            app.transcription_mode = 'wake'
+            app.event({'event':'wake_transcript','epoch':app.epoch,'accepted':False,'characters':12,
+                       'text':'private ambient words','audio':'private audio'})
             self.assertEqual(app.notice, 'Diga “Olá Hermes”')
             app.worker.send.assert_not_called()
             path = Path(folder)/'hermes-voice-diagnostic.json'
-            self.assertEqual(json.loads(path.read_text()), {'accepted':False,'phrase_match':True,
-                'probability':.3,'no_speech':.01,'milliseconds':1800,
-                'capture_ms':1200,'peak':3000,'rms':200,'clipped_samples':0})
+            self.assertEqual(json.loads(path.read_text()), {'accepted':False,'recognizer':'groq','characters':12})
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
-            app.voice_event({'event':'wake_checked','voice_epoch':1,'decision':{'accepted':True}})
+            app.event({'event':'wake_transcript','epoch':app.epoch-1,'accepted':True,'characters':10})
             self.assertFalse(json.loads(path.read_text())['accepted'])
 
     def test_transcription_from_an_abandoned_screen_cannot_become_a_new_prompt(self):

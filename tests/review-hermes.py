@@ -48,6 +48,7 @@ def main():
             def send(self, value):
                 command=value['cmd']
                 if self.arguments[0] == '--listen':
+                    if command == 'accept_wake': self.deliver({'event':'wake','voice_epoch':value['voice_epoch'],'source':'groq'})
                     return
                 if command in ('connect','login'):
                     self.deliver({'event':'connected','text':'Olá! Como posso ajudar?','pending':False})
@@ -56,7 +57,8 @@ def main():
                 elif command == 'speak':
                     self.deliver({'event':'spoken'})
                 elif command == 'transcribe':
-                    self.deliver({'event':'transcript','epoch':value['epoch'],'text':'Pergunta por voz'})
+                    if value.get('scope') == 'wake': self.deliver({'event':'wake_transcript','epoch':value['epoch'],'accepted':True,'recognizer':'groq','characters':10})
+                    else: self.deliver({'event':'transcript','epoch':value['epoch'],'text':'Pergunta por voz'})
                 elif command == 'new_session':
                     self.deliver({'event':'new_session'})
                 elif command in ('stop_speech','cancel'):
@@ -101,7 +103,7 @@ def main():
             pump(.5)
             assert app.scene.canvas.coords(app.scene.eyes[0]) != before_pose
             capture('hermes-ready')
-            app.voice_event({'event':'wake','voice_epoch':app.voice_epoch}); pump(.6)
+            app.voice_event({'event':'utterance','mode':'wake','voice_epoch':app.voice_epoch,'path':'/fixture/wake.wav'}); pump(.6)
             assert app.awake and not app.speech_active
             app.voice_event({'event':'utterance','voice_epoch':app.voice_epoch,'path':'/fixture/postwake.wav'}); pump(.6)
             assert app.last_reply=='Resposta simulada: Pergunta por voz' and not app.pending

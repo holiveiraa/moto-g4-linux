@@ -5,13 +5,15 @@
 After [first connection setup](hermes-setup.md#first-connection-checklist), open
 **Painel → Hermes**. A fullscreen animated face replaces the terminal view.
 Say **Olá Hermes**, wait for **Olá! Estou ouvindo.**, then ask your question.
-The app detects the end of your speech, transcribes with Groq, asks your
+Groq recognizes both activation and requests. Voiced clips go to Groq while
+the app is open, including standby; silence is filtered locally. The app
+detects the end of your speech, transcribes with Groq, asks your
 existing Hermes and speaks through its Edge TTS service. It then listens again
 without another tap or wake phrase.
 
 - **Nova conversa** starts a fresh Moto context in the same profile. Earlier
   chats remain on the server; Telegram and permanent profile memory are separate.
-- **Voltar a dormir** returns to local activation.
+- **Voltar a dormir** returns to waiting for activation through Groq.
 - **Voltar ao terminal**, **Fechar aplicativo** or **×** closes the app,
   releases its audio and restores the existing terminal sessions.
 - **···** or holding the face opens setup, text/history and recovery controls.

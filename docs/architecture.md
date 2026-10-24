@@ -42,8 +42,9 @@ match. [Hermes itself prepares its app/profile](hermes-server-agent.md); the
 client agent handles only the phone. Umbrel gateway/login/TLS remain in place.
 
 The app is a client of the existing Hermes, not another agent model on the
-phone. The local wake helper processes standby audio without a network client.
-Only post-activation speech goes to Groq; text then goes through the protected
+phone. Its local capture process detects speech without interpreting words.
+The network worker sends voiced wake and request clips to Groq; silence stays
+local. Accepted wake text activates without contacting the agent. Requests go through the protected
 Hermes chat API and replies through its Edge speech relay. The phone owns its
 conversation ID in the configured profile. Closing retains it; **Nova conversa**
 replaces it after server confirmation. Telegram sessions are not merged.
@@ -100,8 +101,9 @@ credential files are not an encrypted vault. See [security](../SECURITY.md).
 
 The optional Hermes view uses an immersive native Canvas with compact animated
 Rust vector poses. A separate local-only Rust listener owns ALSA/WebRTC VAD and
-a pinned whisper.cpp helper; the main worker alone handles Groq/Hermes/Edge.
-Standby audio never produces an upload event. Active voice pauses during
+a pinned Silero detector through whisper.cpp's VAD API; the main worker alone
+handles Groq/Hermes/Edge. No ASR model runs locally. Both wake and conversation
+speech produce private upload events after local filtering. Active voice pauses during
 network work/playback and resumes automatically after the acoustic tail.
 Epoch checks discard abandoned-screen transcription callbacks. See
-[design and limits](hermes-assistant.md) before treating local wake as accepted.
+[design and limits](hermes-assistant.md) for current acceptance limits.

@@ -9,7 +9,7 @@ the phone unless you separately invoke a maintenance/install operation.
 
 The optional fullscreen app has an independent Rust build and a pinned local
 activation helper/model. Use [the companion build guide](hermes-setup.md#build-from-public-source)
-and [local activation build](hermes-setup.md#build-the-local-activation-component).
+and [speech detector build](hermes-setup.md#build-the-local-speech-detector).
 The base userspace assembler copies its Python UI modules; Rust/helper/model
 artifacts must be built and installed separately as a matching set. You do not
 need to rebuild the kernel or boot images to add this app to a working system.

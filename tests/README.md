@@ -105,31 +105,34 @@ Xvfb/tmux session, the review uses the real microphone/speaker, plays the suppli
 wake phrase and requires
 activation, then plays the known question after acknowledgment. It checks the
 exact transcript, spoken reply and rearmed idle period. No recording is exported.
+The physical default requires one Groq wake transcription and one request;
+`--physical-negative-first` requires two wake transcriptions and one request.
 This plays synthetic stimuli in the room; it does not establish owner-voice
 acceptance. `--physical-negative-first` separately exercises rejection followed
 by activation; its result is reported explicitly. Staged wake helpers/models can be selected with the local review
 overrides described in [setup](../docs/hermes-setup.md#local-activation-stays-at-three-dots).
 
 Use `--activation app-open` to exercise the opted-in opening gesture instead
-of the local wake recognizer. This verifies the actual GUI → listener activation,
+of the Groq wake phrase. This verifies the actual GUI → listener activation,
 spoken acknowledgment, question, reply and rearming. Its capture fixture starts
 with the question and must not pretend a wake-word candidate was recognized.
-The default `--activation wake-word` still checks local rejection/acceptance.
+The default `--activation wake-word` checks two Groq wake transcriptions: rejection then acceptance.
 After rearming, the fixture feeds low-level speech-shaped noise and observes
 five seconds with no extra transcription or agent submission. Use
 `--idle-seconds 60` for a longer observation (allowed range 5-90 seconds).
 
 `review-hermes-live.py` exercises the actual Tk controller, Rust network worker,
-local VAD/recognizer/model and real Groq → Hermes → Edge services in one chain.
+local speech detection and real Groq → Hermes → Edge services in one chain.
 It replaces only ALSA capture/playback with generated speech and a PCM byte
 sink. It verifies a rejected activation returning to standby, accepted activation,
-spoken acknowledgment, one post-wake transcription, one agent turn, spoken
+spoken acknowledgment, two wake transcriptions plus one request transcription,
+one agent turn, spoken
 reply and automatic listening afterward. It does not establish recognition of
 the owner's voice or physical microphone/speaker performance.
 
 Run only with the owner's authorization to use those services. Close the
 production Hermes app, stage reviewed modules and binary together, then start
-a private Xvfb display. The local recognizer/model and matching Silero verifier
+a private Xvfb display. The matching Silero detector/model
 must already be installed, or selected through the staged VAD review overrides
 documented in [setup](../docs/hermes-setup.md#unsolicited-replies-or-a-conversation-loop).
 Supply three synthetic mono 16 kHz S16 WAVs: a non-wake phrase, “Olá Hermes”
@@ -211,7 +214,7 @@ Use [status](../docs/status.md) and the final phase of
 [agent installation](../docs/agent-installation.md). A simulated API response,
 source test or successful compilation must not be reported as a hardware result.
 
-The Hermes offline regressions also exercise local wake/upload gating at the UI
+The Hermes offline regressions also exercise Groq wake/upload gating at the UI
 boundary, automatic rearming after speech, stale transcription epochs, exact
 new-conversation handling, uncertain-turn guards and forced-child cleanup. Rust
 fixtures cover speech endpoint bounds, constant background rejection via actual

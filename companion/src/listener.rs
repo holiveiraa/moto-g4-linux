@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-//! Separate local-only process: ALSA -> VAD -> local wake recognition.
-//! Only a post-wake utterance produces a private WAV event for the GUI. No
-//! Backend, HTTP client, API keys or cloud fallback are constructed here.
+//! Local-only capture/endpointing and speech verification. Both activation and
+//! conversation clips go to the GUI's Groq transcription worker. This capture
+//! process has no HTTP client, API keys or local phrase recognizer.
 use crate::{
     hearing::{self, Segmenter, FRAME_SAMPLES},
     storage, Error, Result,
@@ -25,12 +25,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-const MODEL: &str = "/usr/local/share/moto-hermes/ggml-base-q5_1.bin";
-const MODEL_SHA: &str = "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898";
 const VAD_MODEL: &str = "/usr/local/share/moto-hermes/ggml-silero-v6.2.0.bin";
 const VAD_SHA: &str = "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987";
 const VAD: Error = Error("Detecção local de fala indisponível. Atualize moto-vad e o modelo Silero; nenhum áudio foi enviado.");
-const LOCAL: Error = Error("Ativação local indisponível. Confira o modelo e o componente moto-wake; nenhum áudio foi enviado.");
+const LOCAL: Error = Error("Escuta indisponível. Confira o microfone e o componente moto-vad.");
 type Emit = Arc<dyn Fn(Value) + Send + Sync>;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -240,32 +238,6 @@ impl Drop for Private {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
-fn helper(control: &Shared, desired: Desired) -> Result<Process> {
-    let model = std::env::var_os("MOTO_HERMES_WAKE_MODEL")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| MODEL.into());
-    let binary = std::env::var_os("MOTO_HERMES_WAKE_BINARY")
-        .unwrap_or_else(|| "/usr/local/bin/moto-wake".into());
-    let metadata = fs::metadata(&model).map_err(|_| LOCAL)?;
-    if !metadata.is_file() || metadata.len() > 80 * 1024 * 1024 {
-        return Err(LOCAL);
-    }
-    let check = Command::new("sha256sum")
-        .arg(&model)
-        .stderr(Stdio::null())
-        .output()
-        .map_err(|_| LOCAL)?;
-    if !check.status.success() || !String::from_utf8_lossy(&check.stdout).starts_with(MODEL_SHA) {
-        return Err(LOCAL);
-    }
-    let mut cmd = Command::new(binary);
-    cmd.arg("--model").arg(model);
-    let mut process = Process::spawn(cmd, None)?;
-    if process.line(control, desired, 25)?["ready"] != true {
-        return Err(LOCAL);
-    }
-    Ok(process)
-}
 fn speech_helper(control: &Shared, desired: Desired) -> Result<Process> {
     // Explicit local review overrides; never supplied by a server or GUI form.
     let model = std::env::var_os("MOTO_HERMES_VAD_MODEL")
@@ -377,136 +349,41 @@ fn segment(
     }
     Ok(None)
 }
-struct WakeCapture {
-    alive: Arc<AtomicBool>,
-    latest: Arc<Mutex<Option<Vec<i16>>>>,
-    error: Arc<Mutex<Option<Error>>>,
-    thread: Option<thread::JoinHandle<()>>,
-}
-impl WakeCapture {
-    fn new(device: &str, control: &Shared, desired: Desired, emit: &Emit) -> Self {
-        let alive = Arc::new(AtomicBool::new(true));
-        let latest = Arc::new(Mutex::new(None));
-        let error = Arc::new(Mutex::new(None));
-        let a = alive.clone();
-        let l = latest.clone();
-        let e = error.clone();
-        let c = control.clone();
-        let emit = emit.clone();
-        let device = device.to_string();
-        let worker = thread::spawn(move || {
-            let result = (|| {
-                let mut input = Capture::new(&device)?;
-                while let Some(audio) = segment(&mut input, &c, desired, &a, 5, &emit)? {
-                    // One latest candidate only; replace old audio while inference runs.
-                    *l.lock().map_err(|_| LOCAL)? = Some(audio);
-                }
-                Ok::<_, Error>(())
-            })();
-            if let Err(error) = result {
-                if let Ok(mut slot) = e.lock() {
-                    *slot = Some(error);
-                }
-            }
-        });
-        Self {
-            alive,
-            latest,
-            error,
-            thread: Some(worker),
-        }
-    }
-}
-impl Drop for WakeCapture {
-    fn drop(&mut self) {
-        self.alive.store(false, Ordering::SeqCst);
-        if let Some(worker) = self.thread.take() {
-            let _ = worker.join();
-        }
-    }
-}
 fn capture_turn(
     device: &str,
     control: &Shared,
     desired: Desired,
-    wake: &mut Option<Process>,
     vad: &mut Option<Process>,
     private: &Private,
     emit: &Emit,
 ) -> Result<()> {
     private.clear();
-    if desired.mode == Mode::Wake {
-        if wake.is_none() {
-            *wake = Some(helper(control, desired)?);
-        }
-        if !current(control, desired) {
+    let mode = if desired.mode == Mode::Wake {
+        "wake"
+    } else {
+        "conversation"
+    };
+    let mut input = Capture::new(device)?;
+    emit(json!({"event":"voice_listening","voice_epoch":desired.epoch,"mode":mode}));
+    let seconds = if desired.mode == Mode::Wake { 5 } else { 45 };
+    let audio = segment(
+        &mut input,
+        control,
+        desired,
+        &AtomicBool::new(true),
+        seconds,
+        emit,
+    )?;
+    drop(input); // Release ALSA before upload or any spoken acknowledgment.
+    if let Some(audio) = audio {
+        if !verified_speech(vad, &audio, control, desired, emit)? {
             return Ok(());
         }
-        let capture = WakeCapture::new(device, control, desired, emit);
-        emit(json!({"event":"voice_listening","voice_epoch":desired.epoch,"mode":"wake"}));
-        while current(control, desired) {
-            if let Some(error) = capture.error.lock().map_err(|_| LOCAL)?.take() {
-                return Err(error);
-            }
-            let audio = capture.latest.lock().map_err(|_| LOCAL)?.take();
-            if let Some(audio) = audio {
-                if !verified_speech(vad, &audio, control, desired, emit)? {
-                    continue;
-                }
-                emit(json!({"event":"wake_checking","voice_epoch":desired.epoch}));
-                let result = wake
-                    .as_mut()
-                    .ok_or(LOCAL)?
-                    .decode(&audio, control, desired)?;
-                if !current(control, desired) {
-                    return Ok(());
-                }
-                emit(json!({"event":"wake_checked","voice_epoch":desired.epoch,
-                    "decision":hearing::wake_diagnostic(&result, &audio)}));
-                if hearing::valid_wake(&result) {
-                    {
-                        let mut c = control.lock().map_err(|_| LOCAL)?;
-                        if !c.alive || c.desired != desired {
-                            return Ok(());
-                        }
-                        c.awake = true;
-                        c.desired.mode = Mode::Paused;
-                    }
-                    // Stop and join local capture BEFORE acknowledgment/playback.
-                    drop(capture);
-                    *wake = None; // Release the wake model during conversation.
-                    emit(json!({"event":"wake","voice_epoch":desired.epoch,"source":"wake_word"}));
-                    return Ok(());
-                }
-                // A rejected candidate ends checking, not the listening turn.
-                // Restore standby even if no further speech is detected.
-                emit(json!({"event":"voice_listening","voice_epoch":desired.epoch,"mode":"wake"}));
-            } else {
-                thread::sleep(Duration::from_millis(10));
-            }
-        }
-    } else {
-        let mut input = Capture::new(device)?;
-        emit(json!({"event":"voice_listening","voice_epoch":desired.epoch,"mode":"conversation"}));
-        let audio = segment(
-            &mut input,
-            control,
-            desired,
-            &AtomicBool::new(true),
-            45,
-            emit,
-        )?;
-        drop(input);
-        if let Some(audio) = audio {
-            if !verified_speech(vad, &audio, control, desired, emit)? {
-                return Ok(());
-            }
-            let mut c = control.lock().map_err(|_| LOCAL)?;
-            if c.alive && c.awake && c.desired == desired {
-                let path = private.wav(&audio)?;
-                c.desired.mode = Mode::Paused;
-                emit(json!({"event":"utterance","voice_epoch":desired.epoch,"path":path}));
-            }
+        let mut c = control.lock().map_err(|_| LOCAL)?;
+        if c.alive && c.desired == desired && (desired.mode == Mode::Wake || c.awake) {
+            let path = private.wav(&audio)?;
+            c.desired.mode = Mode::Paused;
+            emit(json!({"event":"utterance","mode":mode,"voice_epoch":desired.epoch,"path":path}));
         }
     }
     Ok(())
@@ -534,7 +411,6 @@ pub fn run(device: &str, emit: Emit) -> Result<()> {
     let output = emit.clone();
     let device = device.to_string();
     let worker = thread::spawn(move || {
-        let mut wake = None;
         let mut vad = None;
         loop {
             let state = match control.lock() {
@@ -545,10 +421,8 @@ pub fn run(device: &str, emit: Emit) -> Result<()> {
                 thread::sleep(Duration::from_millis(15));
                 continue;
             }
-            if let Err(error) = capture_turn(
-                &device, &control, state, &mut wake, &mut vad, &private, &output,
-            ) {
-                wake = None;
+            if let Err(error) = capture_turn(&device, &control, state, &mut vad, &private, &output)
+            {
                 vad = None;
                 if let Ok(mut c) = control.lock() {
                     if c.alive && c.desired == state {
@@ -586,13 +460,15 @@ pub fn run(device: &str, emit: Emit) -> Result<()> {
         let epoch = value["voice_epoch"].as_u64().unwrap_or(0);
         c.desired.epoch = epoch;
         match command {
-            "activate" => {
+            "activate" | "accept_wake" => {
                 // Only the local GUI's explicitly opted-in app launch sends
                 // this command. Pause until acknowledgment finishes; never
                 // record its playback or need a recognizer to open a turn.
                 c.awake = true;
                 c.desired.mode = Mode::Paused;
-                emit(json!({"event":"wake","voice_epoch":epoch,"source":"app_open"}));
+                emit(
+                    json!({"event":"wake","voice_epoch":epoch,"source":if command == "activate" { "app_open" } else { "groq" }}),
+                );
             }
             "wake" => {
                 c.awake = false;
@@ -603,7 +479,7 @@ pub fn run(device: &str, emit: Emit) -> Result<()> {
             _ => {
                 c.desired.mode = Mode::Paused;
                 emit(
-                    json!({"event":"voice_error","voice_epoch":epoch,"text":"Aguardando ativação local por voz."}),
+                    json!({"event":"voice_error","voice_epoch":epoch,"text":"Aguardando a confirmação da ativação pela Groq."}),
                 );
             }
         }

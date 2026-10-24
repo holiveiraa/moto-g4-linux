@@ -6,6 +6,10 @@ with its original **Athene_16MP** hardware description. No other variant is
 certified by this project. Product-family similarity does not establish matching
 panel, touch, amplifier, memory layout or partition geometry.
 
+Current Hermes activation uses **Groq for wake phrases and requests**; the
+phone runs only speech detection. See [the latest correction](#groq-activation--24-october).
+Earlier local-ASR sections below are dated history, not installation guidance.
+
 ## Working prototype
 
 | Component | Result | Evidence / boundary |
@@ -493,6 +497,44 @@ The installed Rust core is 3,559,368 bytes, SHA256
 The core, wake helper, speech verifier and base model form one guarded userspace
 update. Configuration, current conversation and tmux were preserved; no Umbrel
 host/runtime changes or new cloud wake fallback were made.
+
+## Groq activation — 24 October
+
+The owner still could not activate after the base-model update. Capture had
+strong, unclipped voice but local ASR returned a phrase mismatch. A previous
+synthetic acoustic pass did not establish owner-voice usability. Local word
+decoding has now been removed: Groq recognizes both **Olá Hermes** and requests,
+using the existing private dictation key. This is the requested Groq/Edge path.
+
+WebRTC endpointing and pinned Silero speech detection remain local to filter
+silence/noise. With the app open, voiced standby clips also go to Groq and
+consume its quota. A rejected phrase returns silently to standby; an accepted
+wake phrase is acknowledged, never submitted to Hermes. Capture pauses during
+upload, agent work and speech, then rearms after the acoustic tail. Closing or
+blanking stops capture. There is no local-ASR fallback or automatic upload retry.
+Errors remain visible; diagnostics keep a Groq verdict/count, without words.
+
+- **55 Rust tests** pass on host and on the reference Moto, with formatting and
+  Clippy checks. **127 offline Python regressions** pass; the 26 Hermes cases
+  also pass natively. The isolated fullscreen/input/tmux review passed.
+- The real Groq → Hermes → Edge chain passed on the Moto with synthetic audio:
+  two wake transcriptions (negative then accepted), one request transcription,
+  exactly one agent turn and complete speech, followed by rearmed listening.
+- The separate **physical microphone/speaker** chain also passed the negative
+  phrase, wake phrase and exact known question, with complete Edge playback and
+  **60 seconds without an extra transcription or agent turn**. The stimuli were
+  synthetic speech played in the room; this is not owner-voice acceptance.
+- Owner voice in the intended room, longer ambient-noise use, latency under
+  service/network load and controlled heat/battery remain acceptance limits.
+
+The installed core is 3,542,416 bytes, SHA256
+`6f0c7122e03b2e2397192543d8f1ccada18b2a4d577e870d3d7cbe7422eec25b`.
+Four userspace files were installed: the core, speech-detector binary and two
+matching native integration modules. Independent hash/size/mode readback passed;
+the obsolete local recognizer and tiny/base ASR weights were removed after
+verified backup. Configuration, conversation journal and tmux survived the GUI
+restart. The app reopened connected in wake standby. Silero's small detector
+model remains. No Hermes server change was needed; no Umbrel host was accessed.
 
 ## Distribution maturity
 

@@ -3,69 +3,28 @@ use moto_hermes::{
     face,
     hearing::{self, Segmenter, FRAME_SAMPLES},
 };
-use serde_json::json;
 
 #[test]
-fn wake_diagnostics_exclude_ambient_words_and_bound_metrics() {
-    let result = hearing::wake_diagnostic(
-        &json!({"text":"private ambient words",
-        "probability":0.9,"no_speech":0.01,"milliseconds":1800,"secret":"fixture-secret"}),
-        &[1000; 48000],
-    );
-    assert_eq!(
-        result,
-        json!({"accepted":false,"phrase_match":false,
-        "probability":0.9,"no_speech":0.01,"milliseconds":1800,
-        "capture_ms":1000,"peak":1000,"rms":1000,"clipped_samples":0})
-    );
-    let invalid = hearing::wake_diagnostic(
-        &json!({"text":"Olá Hermes",
-        "probability":2,"no_speech":-1,"milliseconds":25001}),
-        &[],
-    );
-    assert_eq!(
-        invalid,
-        json!({"accepted":false,"phrase_match":true,
-        "probability":null,"no_speech":null,"milliseconds":null,
-        "capture_ms":0,"peak":0,"rms":0,"clipped_samples":0})
-    );
-}
-
-#[test]
-fn wake_requires_the_whole_phrase_speech_and_probability() {
-    assert!(hearing::valid_wake(
-        &json!({"text":" Olá, Hermes!","probability":0.85,"no_speech":0.02})
-    ));
-    assert!(hearing::valid_wake(
-        &json!({"text":"Ula Hermes.","probability":0.49,"no_speech":0.001})
-    ));
-    assert!(!hearing::valid_wake(
-        &json!({"text":"Ula Maria.","probability":0.9,"no_speech":0.001})
-    ));
-    for value in [
-        json!({"text":"Olá Maria","probability":0.9,"no_speech":0.01}),
-        json!({"text":"Olá Hermes e o resto da televisão","probability":0.9,"no_speech":0.01}),
-        json!({"text":"Olá Hermes","probability":0.2,"no_speech":0.01}),
-        json!({"text":"Olá Hermes","probability":0.9,"no_speech":0.8}),
-        json!({"text":"Olá Hermes"}),
-    ] {
-        assert!(!hearing::valid_wake(&value));
-    }
-}
-
-#[test]
-fn repeated_wake_words_are_one_activation_but_other_words_remain_rejected() {
-    assert!(hearing::valid_wake(
-        &json!({"text":"Olá Hermes. Olá Hermes!","probability":0.7,"no_speech":0.01})
-    ));
+fn groq_activation_requires_the_whole_phrase() {
     for text in [
-        "Olá Maria. Olá Hermes",
+        "Olá, Hermes!",
+        " OLA HERMES ",
+        "Olá Ermes",
+        "Ula Hermes",
+        "Olá Hermes. Olá Hermes!",
+    ] {
+        assert!(hearing::matches_wake(text));
+    }
+    for text in [
+        "",
+        "Olá",
+        "Olá Maria",
         "Olá Hermes pesquise",
+        "Olá Maria. Olá Hermes",
+        "Explique Olá Hermes",
         "Olá Hermes e Olá Hermes",
     ] {
-        assert!(!hearing::valid_wake(
-            &json!({"text":text,"probability":0.9,"no_speech":0.01})
-        ));
+        assert!(!hearing::matches_wake(text));
     }
 }
 #[test]

@@ -6,7 +6,9 @@ records primary-source research, repository inspection and a focused Astra
 architecture review. The [setup guide](hermes-setup.md) describes the implemented
 client and installation boundary. Astra reviewed the design and the local hearing implementation. Static review
 identified noise detection, capture continuity and temporary-file cleanup issues;
-these were corrected with WebRTC VAD, a bounded capture queue and volatile storage.
+the current flow uses WebRTC/Silero detection, paused capture during Groq requests
+and volatile storage. Local transcription experiments were removed after owner
+activation failures; Groq now interprets wake phrases and requests.
 
 ## Product decision
 
@@ -65,7 +67,7 @@ output/network queues are independent. [Espressif WakeNet](https://docs.espressi
 is a trained keyword detector for supported MCUs, not a drop-in Linux model.
 
 [JARVIS Desk Bot](https://github.com/dreamhunter02/jarvis-desk-bot) demonstrates
-the requested Hermes integration: local activation, an audible acknowledgment,
+the requested Hermes integration: voice activation, an audible acknowledgment,
 server ASR/agent/TTS, and conversation retained until an explicit goodbye.
 The useful lessons are explicit activation/turn states, confirmation, persistent
 conversation and independent bounded audio queues. Its firmware, extra speech
@@ -96,11 +98,12 @@ Preserve original licenses and add attribution/pins if implementation reuses any
 flowchart LR
     P[Existing panel] --> A[Rust companion app]
     A --> C[ALSA microphone capture]
-    C --> W[Local VAD and wake gate]
-    W -->|Standby: discard locally| D[No upload]
-    W -->|Activated: next utterance| G[Groq cloud STT]
+    C --> W[Local speech detection]
+    W -->|Silence or rejected noise| D[No upload]
+    W -->|Voiced wake or request| G[Groq cloud STT]
     G --> T[Recognized text]
-    T --> U[Authenticated Umbrel app gateway]
+    T -->|Complete wake phrase| K[Activate and acknowledge]
+    T -->|Conversation request| U[Authenticated Umbrel app gateway]
     U --> H[Existing Hermes session]
     H --> E[Existing Edge TTS on server]
     E --> U
@@ -121,7 +124,7 @@ provider fails, retain a usable text conversation and an honest error state.
   Canvas; no dashboard, chat bubbles or push-to-talk button occupies the main view.
   This replaces the initial SDL2-window proposal and reuses established focus
   and keyboard handling without adding a second graphics toolkit. No GPU or
-  direct framebuffer access is required. A separate Rust listener owns ALSA capture and local wake recognition.
+  direct framebuffer access is required. A separate Rust listener owns ALSA capture and local speech detection; Groq interprets all words.
 - The face has disconnected, connecting, ready, listening, transcribing,
   thinking, speaking, awaiting-confirmation and error expressions. Animation
   follows actual events, not a timer pretending that work completed.
@@ -162,30 +165,27 @@ Both existing dictation and the Rust listener use the same private inherited
 `flock` lease at `/run/moto-capture.lock`. Closing terminates only owned capture,
 recognition and playback processes. Dictation keeps its UTF-8/no-Enter contract.
 
-The accepted interaction uses local activation and automatic half duplex:
+The current interaction uses Groq activation and automatic half duplex:
 
-1. While the app is open and connected, WebRTC VAD filters native 48 kHz frames.
-2. Silero verifies candidate speech; a pinned multilingual Whisper base q5_1
-   helper checks it locally
-   for the whole normalized phrase **Olá Hermes** with probability/no-speech
-   thresholds. It receives only a proper-name spelling hint, never a forced
-   phrase or previous transcript prompt. Repetitions of only the wake phrase
-   count as one activation. Its model is released after activation.
-3. The activation recording is discarded, including any extra command spoken
-   in that same utterance. **Nothing from standby is uploaded to Groq.**
-4. After spoken acknowledgment, automatic end-of-speech emits a private bounded
-   WAV for Groq. No button and no repeated wake word are needed for each turn.
-5. Capture is paused during transcription, Hermes work and speech playback.
-   After playback completes, a 400 ms acoustic tail precedes listening again.
-6. **Voltar a dormir** returns to local activation. Closing/blanking stops all
-   local hearing. No voice barge-in/AEC is claimed in this revision.
+1. With the app open and connected, WebRTC endpointing and Silero filter speech.
+2. Voiced standby clips (up to five seconds) go to Groq. A complete normalized
+   **Olá Hermes** phrase activates; other text returns silently to standby.
+   Wake words are not agent requests. Repeated wake phrases count once.
+3. After spoken acknowledgment, end-of-speech sends each request (up to 45
+   seconds) to Groq, then sends its text to the dedicated Hermes conversation.
+4. Capture pauses during upload, Hermes work and playback. After speech
+   completes, a 400 ms acoustic tail precedes listening again.
+5. **Voltar a dormir** returns to Groq activation. Closing/blanking stops
+   capture. There is no barge-in/AEC claim or local transcription fallback.
 
-Wake capture continues while local inference runs, retaining only one latest
-candidate (maximum five seconds), replacing obsolete queued audio. Active
-utterances have a 45-second bound. `/run` directories are created 0700 and WAVs
-0600; normal shutdown and parent cleanup after forced termination remove them.
-No background service or cloud wake fallback exists. Never restart ADSP/WCNSS
-as an audio retry. Existing volume/default speaker routing is preserved.
+Groq uses the same private key as dictation. Standby voiced clips also consume
+its quota and require internet; silence/rejected noise stay local. Private WAVs
+live under `/run` (directories 0700, files 0600) and are removed on cleanup.
+The local detector uses whisper.cpp's Silero VAD API, with no ASR model or
+word decoding. Never restart ADSP/WCNSS as an audio retry.
+
+Earlier local-ASR experiments described in the dated history below were
+superseded after owner-voice recognition failures; they are not setup steps.
 
 ### Wake engines and animated-device research
 
@@ -198,7 +198,7 @@ Research refreshed 22 October 2026, using primary project documentation:
 | [openWakeWord](https://github.com/dscripka/openWakeWord) | Upstream models support English; code Apache-2.0, bundled weights CC-BY-NC-SA-4.0. No ready Portuguese “Olá Hermes” model was established. |
 | [sherpa-onnx KWS](https://k2-fsa.github.io/sherpa/onnx/kws/index.html) | Existing KWS models target English/Chinese. Open vocabulary does not establish Portuguese support. |
 | [Vosk](https://alphacephei.com/vosk/models) | Portuguese small model is 31 MB, Apache-2.0. Grammar cannot introduce an unknown proper noun; musl/Kaldi packaging adds work. |
-| [whisper.cpp](https://github.com/ggml-org/whisper.cpp) | Multilingual CPU/ARM implementation, MIT. Chosen for the first measurable local Portuguese experiment; not a specialized low-power wake engine. Exact source/model hashes are in `companion/wake/pins.json`. |
+| [whisper.cpp](https://github.com/ggml-org/whisper.cpp) | MIT implementation used for the Silero VAD API only. Earlier Portuguese ASR experiments were removed; current pins include source and speech-detector weights, with no ASR model. |
 | [microWakeWord](https://github.com/OHF-Voice/micro-wake-word) | Apache-2.0; attractive low-compute future route, requiring a trained and evaluated Portuguese model. No ready model was verified. |
 | [WebRTC VAD Rust binding](https://github.com/kaegi/webrtc-vad) | Pinned 0.4.0 wrapper over libfvad, 48 kHz/20 ms frames; filters speech rather than relying on loudness alone. Wrapper/upstream licenses stay separate. |
 
@@ -357,7 +357,7 @@ fixtures. Unit tests do not contact Groq, Microsoft, the owner's Hermes or SSH.
 | 3. Audio | Shared mic lock, bounded capture, Groq adapter, existing Edge PCM stream | Existing dictation preserved; no self-transcription; text remains on TTS failure; playback stop and buffer bounds |
 | 4. Integration | Panel launcher/forms, isolated Xvfb/tmux review, rollback package | Repeated open/talk/hear/close with immutable tmux IDs and original SSH session retained; synthetic form secrets never enter PTY |
 | 5. Physical acceptance | Owner-approved userspace deployment and Wi-Fi/Tailscale trials | Portuguese speech intelligibility, actual mic release, volume, reconnection, server-auth expiry and measured resource use |
-| 6. Required voice-pet UX | Fullscreen face, local wake, automatic endpointing and new-conversation command | Host fixtures pass; native wake accuracy/latency/heat and physical acceptance remain required |
+| 6. Required voice-pet UX | Fullscreen face, Groq wake, automatic endpointing and new-conversation command | Host fixtures pass; native wake accuracy/latency/heat and physical acceptance remain required |
 
 Essential adversarial cases before the happy path is declared complete:
 

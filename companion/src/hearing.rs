@@ -70,52 +70,19 @@ pub fn normalized(text: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
 }
-fn wake_threshold(result: &Value) -> Option<f64> {
-    // Whole wake phrases only, including a user repeating the wake phrase
-    // before acknowledgment. Never accept a substring of another utterance.
-    let phrase = normalized(result["text"].as_str().unwrap_or(""));
+/// Match only the activation phrase returned by Groq, never a substring or
+/// a command to submit to Hermes. Repeated wake phrases are one activation.
+pub fn matches_wake(text: &str) -> bool {
+    let phrase = normalized(text);
     let words: Vec<_> = phrase.split_whitespace().collect();
-    if words.is_empty() || !words.len().is_multiple_of(2) {
-        return None;
-    }
-    let mut threshold = 0.40f64;
-    for pair in words.as_chunks::<2>().0 {
-        match (pair[0], pair[1]) {
-            ("ola", "hermes" | "ermes") => (),
-            ("ula", "hermes") => threshold = 0.45,
-            _ => return None,
-        }
-    }
-    Some(threshold)
-}
-pub fn valid_wake(result: &Value) -> bool {
-    let Some(threshold) = wake_threshold(result) else {
-        return false;
-    };
-    result["probability"]
-        .as_f64()
-        .is_some_and(|p| (threshold..=1.0).contains(&p))
-        && result["no_speech"]
-            .as_f64()
-            .is_some_and(|p| (0.0..=0.45).contains(&p))
-}
-
-/// One bounded decision, without ambient text or audio. Never forward the
-/// recognizer's object: future helper fields may contain private material.
-pub fn wake_diagnostic(result: &Value, audio: &[i16]) -> Value {
-    let energy: f64 = audio.iter().map(|s| (*s as f64).powi(2)).sum();
-    let probability = |key: &str| result[key].as_f64().filter(|v| (0.0..=1.0).contains(v));
-    serde_json::json!({
-        "capture_ms": audio.len() as u64 * 1000 / 48000,
-        "peak": audio.iter().map(|s| i32::from(*s).unsigned_abs()).max().unwrap_or(0),
-        "rms": (energy / audio.len().max(1) as f64).sqrt().round() as u64,
-        "clipped_samples": audio.iter().filter(|s| i32::from(**s).unsigned_abs() >= 32760).count(),
-        "accepted": valid_wake(result),
-        "phrase_match": wake_threshold(result).is_some(),
-        "probability": probability("probability"),
-        "no_speech": probability("no_speech"),
-        "milliseconds": result["milliseconds"].as_u64().filter(|v| *v <= 25000),
-    })
+    !words.is_empty()
+        && words.len().is_multiple_of(2)
+        && words.as_chunks::<2>().0.iter().all(|pair| {
+            matches!(
+                (pair[0], pair[1]),
+                ("ola", "hermes" | "ermes") | ("ula", "hermes")
+            )
+        })
 }
 pub fn action(text: &str) -> Option<&'static str> {
     match normalized(text).as_str() {

@@ -25,6 +25,7 @@ class HermesPanel:
         self.last_reply = self.last_user = self.notice = self.login_password = ''
         self.voice_warning = ''
         self.open_activation_pending = False
+        self.transcription_mode = None
         self.screen_suspended = False
         self.pending = self.connected = self.transcribing = self.speech_active = False
         self.forgetting = self.switching = self.awake = self.face_pending = False
@@ -169,21 +170,19 @@ class HermesPanel:
         if event == 'wake':
             self.awake = True
             self.say('Olá! Estou ouvindo.')
-        elif event == 'utterance' and self.awake and not (self.pending or self.speech_active or self.transcribing):
+        elif event == 'utterance' and not (self.pending or self.speech_active or self.transcribing):
+            mode = value.get('mode', 'conversation')
+            if mode not in ('wake','conversation') or (mode == 'conversation') != self.awake:
+                return
             self.voice_warning = ''
             self.pause_listening()
             self.transcribing = True
-            self.set_status('Estou ouvindo sua mensagem…', 'transcribing')
-            if not self.command({'cmd':'transcribe', 'epoch':self.epoch, 'path':value['path']}): self.transcribing = False
+            self.transcription_mode = mode
+            self.set_status('Diga “Olá Hermes”' if mode == 'wake' else 'Estou ouvindo sua mensagem…', 'standby' if mode == 'wake' else 'transcribing')
+            if not self.command({'cmd':'transcribe', 'scope':mode, 'epoch':self.epoch, 'path':value['path']}): self.transcribing = False
         elif event == 'voice_listening':
             if self.voice_warning: self.set_status(self.voice_warning, 'error')
             else: self.set_status('Pode falar' if self.awake else 'Diga “Olá Hermes”', 'listening' if self.awake else 'standby')
-        elif event == 'wake_checking':
-            # Ambient candidates remain standby until activation is accepted.
-            self.set_status('Diga “Olá Hermes”', 'standby')
-        elif event == 'wake_checked':
-            try: backend.save_voice_diagnostic(value.get('decision') or {})
-            except (OSError, ValueError): pass
         elif event == 'capture_health':
             try: backend.save_capture_diagnostic(value.get('metrics') or {})
             except (OSError, ValueError): pass
@@ -238,11 +237,25 @@ class HermesPanel:
             else:
                 self.set_status('Resposta recebida.', 'ready')
                 self.resume_after_voice()
+        elif event == 'wake_transcript':
+            if not (self.transcribing and self.transcription_mode == 'wake' and self.fullscreen() and value.get('epoch') == self.epoch):
+                return
+            self.transcribing = False
+            self.transcription_mode = None
+            try: backend.save_voice_diagnostic(value)
+            except (OSError, ValueError): pass
+            if value.get('accepted') is True:
+                try: self.listener.send({'cmd':'accept_wake', 'voice_epoch':self.voice_epoch})
+                except (RuntimeError, AttributeError): self.set_status('A escuta encerrou. Reabra o app.', 'error')
+            else:
+                self.set_status('Diga “Olá Hermes”', 'standby')
+                self.listen()
         elif event == 'transcript':
-            valid = self.transcribing and self.fullscreen() and value.get('epoch') == self.epoch
+            valid = self.transcribing and self.transcription_mode != 'wake' and self.fullscreen() and value.get('epoch') == self.epoch
             if not valid:
                 return
             self.transcribing = False
+            self.transcription_mode = None
             if valid:
                 action = value.get('action')
                 if action == 'new_session': self.new_session()
@@ -270,6 +283,7 @@ class HermesPanel:
                     and type(diagnostic.get('code')) is int):
                 text += f" [{diagnostic['method']}, código {diagnostic['code']}]"
             self.set_status(text, 'error')
+            if value.get('operation') == 'transcribe': self.voice_warning = text
             if value.get('login') or value.get('totp'):
                 self.connected = False
                 self.login(two_factor=bool(value.get('totp')))
@@ -305,6 +319,7 @@ class HermesPanel:
         if self.scene:
             self.scene.dispose()
         self.transcribing = False
+        self.transcription_mode = None
         self.pause_listening()
         self.stop_speech()
 
@@ -417,7 +432,7 @@ class HermesPanel:
                            fg=p.theme.FG, selectcolor=p.theme.KEY, activebackground=p.theme.BG,
                            font=('DejaVu Sans', -p.u(16))).pack(fill='x', pady=p.u(5))
         p.label('A sessão lembrada é privada, mas não criptografada. A chave Groq é configurada em Voz e áudio.', p.u(14), p.theme.MUTED)
-        p.label('Ao começar pela abertura, o app confirma em voz e envia as falas seguintes à Groq. Desmarcado: espera “Olá Hermes” localmente.', p.u(14), p.theme.MUTED)
+        p.label('Com o app aberto, os trechos com fala vão à Groq para reconhecer “Olá Hermes” e os pedidos. O silêncio é filtrado no aparelho.', p.u(14), p.theme.MUTED)
         p.note = p.label('', p.u(15), p.theme.MUTED)
         def save():
             try:

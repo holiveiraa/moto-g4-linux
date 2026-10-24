@@ -338,9 +338,12 @@ impl Backend {
         }
         let value: Value = serde_json::from_str(&body(response, 131072)?)
             .map_err(|_| Error("Resposta da Groq inválida."))?;
-        let text = value["text"].as_str().unwrap_or("").trim();
-        if text.is_empty() || text.chars().count() > protocol::MAX_TEXT {
-            return Err(Error("Nenhuma fala reconhecida. Grave novamente."));
+        let text = value["text"]
+            .as_str()
+            .ok_or(Error("Resposta da Groq inválida."))?
+            .trim();
+        if text.chars().count() > protocol::MAX_TEXT {
+            return Err(Error("A transcrição excedeu o tamanho de uma fala."));
         }
         Ok(text.into())
     }

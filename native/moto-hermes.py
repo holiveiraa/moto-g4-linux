@@ -95,17 +95,10 @@ def save_private_json(value, target):
 
 
 def save_voice_diagnostic(value):
-    """Keep only the latest local decision; no transcript, audio or endpoint."""
-    def probability(key):
-        v = value.get(key)
-        return v if type(v) in (float, int) and 0 <= v <= 1 else None
-    duration = value.get('milliseconds')
-    safe = {key:value.get(key) is True for key in ('accepted', 'phrase_match')}
-    safe.update({key:probability(key) for key in ('probability', 'no_speech')})
-    safe['milliseconds'] = duration if type(duration) is int and 0 <= duration <= 25000 else None
-    for key, maximum in (('capture_ms', 5000), ('peak', 32768), ('rms', 32768), ('clipped_samples', 240000)):
-        metric = value.get(key)
-        safe[key] = metric if type(metric) is int and 0 <= metric <= maximum else None
+    """Latest Groq activation verdict only; never recognized words or audio."""
+    characters = value.get('characters')
+    safe = {'accepted':value.get('accepted') is True, 'recognizer':'groq',
+            'characters':characters if type(characters) is int and 0 <= characters <= 20000 else None}
     save_private_json(safe, CONFIG.with_name('hermes-voice-diagnostic.json'))
 
 

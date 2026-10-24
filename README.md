@@ -20,7 +20,7 @@
 ## Bring your Hermes to life
 
 Open **Painel → Hermes** and the terminal gives way to an animated character.
-By default it waits quietly for local activation. Say **“Olá Hermes”**, wait
+By default it waits quietly for voice activation through Groq. Say **“Olá Hermes”**, wait
 for its spoken acknowledgment, then talk naturally:
 it listens when you finish, asks **your existing Hermes Agent**, speaks the reply
 and listens again. Say **“Nova conversa”** to change context or **“Voltar ao
@@ -43,9 +43,10 @@ interface previews, not evidence of a live agent conversation. See
 [screenshots and provenance](docs/screenshots.md).
 
 - **A living fullscreen face:** animated eyes and expressions, no chat form in
-  the main voice flow. Local activation runs only while the app is open.
-- **Hands-free turns:** local “Olá Hermes” detection, Groq transcription after
-  activation and server-side Edge TTS. No push-to-talk between questions.
+  the main voice flow. Capture runs only while the app is open.
+- **Hands-free turns:** Groq recognizes “Olá Hermes” and subsequent requests;
+  server-side Edge TTS speaks replies. Voiced clips go to Groq even before
+  activation; silence is filtered locally. No push-to-talk between questions.
 - **Your agent and tools:** the chosen Hermes profile, with a separate Moto
   conversation retained across opens. **Nova conversa** starts a fresh one
   without resetting Telegram or deleting earlier chats.
@@ -57,14 +58,10 @@ interface previews, not evidence of a live agent conversation. See
 - **Back to Linux whenever you want:** closing releases capture/playback and
   restores the terminal; GUI restarts preserve tmux sessions.
 
-**Experimental:** installed on the reference Moto. Groq → Hermes → Edge passes
-with real services. The current base-model update passed a known acoustic wake
-phrase and question through the physical microphone/speaker, followed by 60
-seconds of listening without another request. Earlier owner-voice activation
-failed on the tiny model; owner acceptance of the new wake model and heat/battery
-still need verification. Local wake
-does not make conversation offline: transcription and synthesis need internet.
-[Evidence and limits](docs/status.md#acoustic-wake-model-correction--24-october).
+**Experimental:** Groq handles activation and conversation; the phone does not
+run a local speech recognizer. Native fixtures and real-service checks are
+recorded with their limits in [status](docs/status.md#groq-activation--24-october).
+Owner-voice acceptance and controlled heat/battery measurements remain required.
 
 ## Connect your Hermes: two sides, one setup
 
@@ -146,7 +143,7 @@ silently format a connected phone. [Installation and recovery](docs/installation
 | Saved Wi-Fi / Tailscale / SSH | Physical Wi-Fi and Tailscale SSH use | QR login needs a browser on another device |
 | Speaker / microphone / volume / dictation | Physical use after an unplugged power cycle | Headset/BT/calls not established |
 | Optional SSH password / host checks | Real phone OpenSSH against an isolated fixture | Private files, not encrypted storage |
-| Hermes face / local activation / voice flow | Installed; native fixtures and real-service chain with synthetic audio pass | Owner wake/noise, physical conversation and heat/battery pending |
+| Hermes face / Groq activation / voice flow | Installed; native fixtures and real-service chain with synthetic audio pass | Owner wake/noise, physical conversation and heat/battery pending |
 | Fresh install on another unit | Agent workflow documented | Independent reproduction still needed |
 
 The [full matrix](docs/status.md) separates physical tests from simulations. The

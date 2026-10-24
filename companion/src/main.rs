@@ -470,7 +470,11 @@ impl Runtime {
                     runtime
                         .backend
                         .transcribe(&path, &runtime.backend.directory.join("groq.json"))
-                        .map(|text| json!({"event":"transcript","epoch":command["epoch"],"action":moto_hermes::hearing::action(&text),"text":text}))
+                        .map(|text| if command["scope"] == "wake" {
+                            json!({"event":"wake_transcript","epoch":command["epoch"],"accepted":moto_hermes::hearing::matches_wake(&text),"characters":text.chars().count(),"recognizer":"groq"})
+                        } else {
+                            json!({"event":"transcript","epoch":command["epoch"],"action":moto_hermes::hearing::action(&text),"text":text})
+                        })
                 }
                 _ => Err(Error("Operação desconhecida.")),
             };

@@ -57,7 +57,7 @@ repository include:
   saved destinations and optional endpoint-bound SSH passwords.
 - Groq capture/transcription/review and keyboard dictation that pastes without Enter.
 - Fullscreen Hermes companion, original vector face, Rust conversation/auth/audio
-  client, local activation integration and separate-context voice commands.
+  client, Groq activation integration and separate-context voice commands.
 - Isolated regressions, real PTY/OpenSSH fixture checks and agent-facing documentation.
 
 Groq is an external optional transcription service, not a locally implemented
@@ -70,8 +70,8 @@ sponsors. No endorsement by Motorola, postmarketOS or the other projects is impl
 [Xiaozhi ESP32](https://github.com/78/xiaozhi-esp32) and
 [RoboEyes](https://github.com/fluxgarage/RoboEyes) informed the animated-device
 interaction. The fullscreen vector character is original; no GPL RoboEyes
-code/art is included. The local recognizer separately builds MIT-licensed
-[whisper.cpp](https://github.com/ggml-org/whisper.cpp) and obtains pinned
-multilingual Whisper weights. WebRTC VAD uses the pinned Rust wrapper/libfvad
+code/art is included. The local speech detector separately builds MIT-licensed
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) for its Silero VAD API and
+obtains pinned Silero weights. It does not run Whisper ASR or require its weights. WebRTC VAD uses the pinned Rust wrapper/libfvad
 with their individual notices. Downloads/weights and build tools remain outside
 Git. See [research](docs/hermes-assistant.md) and [license scope](LICENSES/README.md).

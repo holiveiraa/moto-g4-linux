@@ -25,7 +25,7 @@ Se está começando com outro telefone, use primeiro o
 [guia de instalação por agente](agent-installation.md). Se a base Linux já
 funciona, peça ao agente do Moto para seguir o
 [build e instalação do app](hermes-setup.md#build-from-public-source), incluindo
-o modelo local de ativação. Não use um rootfs configurado de outra pessoa.
+o detector de fala Silero. Não use um rootfs configurado de outra pessoa.
 
 ## 2. Envie estas instruções ao próprio Hermes
 
@@ -57,9 +57,10 @@ Abra **Painel → Voz e áudio → Groq** e cadastre **sua própria chave** nos 
 privados do telefone. O app usa essa mesma configuração do ditado; não é
 necessário duplicar a chave dentro do Hermes servidor.
 
-O áudio de espera por “Olá Hermes” é processado localmente e descartado.
-Depois da confirmação falada, cada fala da conversa é enviada à Groq para
-transcrição. A fala de resposta usa o serviço online Edge a partir do Hermes.
+A Groq reconhece tanto “Olá Hermes” quanto os pedidos. Com o app aberto,
+trechos com fala vão à Groq mesmo antes da ativação; silêncio e ruído rejeitado
+ficam locais. O Motorola não transcreve com Whisper local. A frase de ativação
+não vira pedido ao agente. A resposta usa Edge online a partir do Hermes.
 
 ## 4. Preencha a conexão no app
 
@@ -123,16 +124,15 @@ abrir** desmarcado. Depois da ativação, converse sem repetir a frase a cada
 pergunta. Sem fala, ele permanece quieto na escuta. O cliente verifica cada
 candidato de fala localmente com Silero antes de enviá-lo à Groq; o runtime,
 `moto-vad` e o modelo precisam estar na mesma instalação atualizada.
-Para a ativação atual, instale também o `moto-wake` correspondente e o modelo
-multilíngue `ggml-base-q5_1.bin`; apenas o modelo tiny antigo não atende ao novo
-runtime. O build e os destinos estão no [guia técnico](hermes-setup.md#prepare-a-userspace-installation).
+Não é necessário instalar `moto-wake` nem modelos Whisper no telefone.
+Atualizações antigas devem remover esses componentes após backup e validação.
+Os arquivos e destinos estão no [guia técnico](hermes-setup.md#prepare-a-userspace-installation).
 
 Como alternativa explícita, para começar assim que abrir o bichinho, marque **Começar a conversa ao abrir**
 em **Configurar**. Ao abrir, ele conecta e diz **“Olá! Estou ouvindo.”**; espere a
 confirmação e faça a pergunta. A partir daí as falas seguem para a Groq e para
 seu Hermes. Essa opção é explícita e vem desmarcada em configurações antigas.
-Ela inicia a conversa pela abertura do app; não significa que a detecção local
-de “Olá Hermes” foi corrigida. Com a opção desmarcada, siga a ativação abaixo.
+Ela inicia a conversa pela abertura do app e pula a frase de ativação. Com a opção desmarcada, siga a ativação abaixo.
 
 1. Com o rosto conectado, diga **“Olá Hermes”** sozinho.
 2. Espere **“Olá! Estou ouvindo.”**. A frase de ativação inteira é descartada;
@@ -149,9 +149,9 @@ de “Olá Hermes” foi corrigida. Com a opção desmarcada, siga a ativação 
 
 | Você diz | Resultado |
 | --- | --- |
-| “Olá Hermes” | Ativa a conversa, a partir da espera local. |
+| “Olá Hermes” | Ativa a conversa, a partir da espera conectada à Groq. |
 | “Nova conversa” / “Hermes, nova conversa” | Troca o contexto atual depois da confirmação do servidor. |
-| “Voltar a dormir” | Volta a esperar ativação local. |
+| “Voltar a dormir” | Volta a esperar ativação pela Groq. |
 | “Fechar aplicativo” / “Voltar ao terminal” | Fecha o app e encerra seus processos de áudio. |
 
 O app usa uma conversa própria do Moto, diferente do Telegram. Fechar e reabrir

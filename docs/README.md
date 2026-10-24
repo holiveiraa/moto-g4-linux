@@ -24,7 +24,7 @@ converse hands-free and return to persistent terminal tabs, SSH and Tailscale.
 
 ## Connect your Hermes
 
-The **Moto app** handles local activation, microphone capture, Groq
+The **Moto app** handles voice activation through Groq, microphone capture,
 transcription, the face and playback. **Your existing Hermes** handles the
 chosen agent profile, conversation/tools and Edge speech synthesis. The phone
 uses a separate conversation in that profile; **Nova conversa** changes context

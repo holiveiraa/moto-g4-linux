@@ -24,8 +24,9 @@ Do not distribute device identities, maintenance private keys, Wi-Fi/SSH/Groq
 credentials, recordings, owner logs or rootfs backups. See [credits](CREDITS.md)
 for provenance and [release gates](docs/releasing.md) before creating binaries.
 
-The optional local voice recognizer builds whisper.cpp separately (MIT), with
-pinned multilingual Whisper weights. Preserve its model and upstream notices.
+The optional local speech detector builds whisper.cpp separately (MIT), using
+its Silero VAD API and pinned Silero weights, without Whisper ASR. Preserve the
+Silero model and upstream notices.
 The Rust WebRTC VAD wrapper/libfvad retain their own MIT/BSD-style notices;
 the Rust build helper collects dependency notice files. Robot-eye behavior was
 researched in RoboEyes (GPL-3.0); its implementation/art is not included here.

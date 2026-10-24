@@ -122,15 +122,15 @@ workflow, including for diagnostics.
 - Linux/WSL for builds, with source/build outputs on the Linux filesystem.
   Windows can continue owning USB. Normal builds never contact a device.
 
-Standby activation runs locally using WebRTC endpointing, a pinned Silero speech
-verifier and a pinned multilingual Whisper base model. The activation clip is discarded, never uploaded. After
-acknowledgment, each utterance is sent to Groq when speech ends automatically.
-Replies reach the server's online Edge service after its provider verdict is
-confirmed. Both normal transcription and speech synthesis require internet.
-Missing local recognition components produce an explicit error in wake-word
-mode, with no cloud wake fallback. Explicit app-open activation starts the
-conversation without running the wake recognizer; it does not transcribe
-standby audio under the guise of local detection.
+Groq recognizes both **Olá Hermes** and subsequent requests, using the same
+private key as dictation. While the app is open and connected, voiced clips are
+sent to Groq even before activation. Silence and rejected noise stay local:
+WebRTC endpointing and a pinned Silero model detect speech, not words. The phone
+does not run Whisper transcription or load an ASR model. Wake text is checked
+for the complete phrase and never sent to Hermes as a request. Internet/Groq
+quota are required from standby onward; Edge synthesis also requires internet.
+Closing or blanking stops capture. Explicit app-open activation skips the wake
+utterance and proceeds directly to the spoken acknowledgment.
 
 ## Build from public source
 
@@ -181,25 +181,23 @@ PCM playback and a lost response across a client restart. Separate real HTTPS/WS
 verify custom-CA trust, rejection of unknown CAs and hostname mismatches. They
 use fresh test-only certificates and no real key.
 
-## Build the local activation component
+## Build the local speech detector
 
 On the Linux build host, install CMake >=3.20 and make, and use the same pinned
 Zig 0.15.2 as the Rust cross build:
 
 ```sh
-python3 scripts/build-wake.py --target host
-python3 scripts/build-wake.py --target aarch64-linux-musl
+python3 scripts/build-hearing.py --target host
+python3 scripts/build-hearing.py --target aarch64-linux-musl
 ```
 
-The helper verifies the source archive, multilingual `ggml-base-q5_1.bin`
-and `ggml-silero-v6.2.0.bin`
-against [pinned hashes](../companion/wake/pins.json), builds a static CPU-only
-`moto-wake` and `moto-vad`, and collects project/upstream/model notices. Downloads/builds remain in a
-separate Linux work folder. The wake model is 59,707,625 bytes; budget additional
-runtime memory and measure actual heat/latency before accepting wake behavior.
-No Python speech framework or model download runs on the phone at app startup.
-The small C++ bridge uses maintained whisper.cpp; the coordinator, voice state,
-VAD endpointing and activation policy remain Rust.
+The helper verifies the upstream source and `ggml-silero-v6.2.0.bin` against
+[pinned hashes](../companion/wake/pins.json), builds static CPU-only `moto-vad`
+and collects project/upstream/model notices. The detector model is 885,098 bytes.
+The C++ bridge uses whisper.cpp's VAD API only: it does not transcribe words,
+download Whisper ASR weights or build `moto-wake`. `scripts/build-wake.py` is a
+compatibility entry point to this same detector build. Downloads/build outputs
+stay in a separate Linux work folder; nothing downloads when the app starts.
 
 ## Prepare a userspace installation
 
@@ -212,9 +210,7 @@ The optional companion's file layout is:
 | Destination | Source |
 | --- | --- |
 | `/usr/local/bin/moto-hermes` | Verified ARM64 Rust artifact, 0755 |
-| `/usr/local/bin/moto-wake` | Verified static ARM64 recognizer artifact, 0755 |
 | `/usr/local/bin/moto-vad` | Matching static ARM64 Silero verifier, 0755 |
-| `/usr/local/share/moto-hermes/ggml-base-q5_1.bin` | Hash-verified wake model, 0644 |
 | `/usr/local/share/moto-hermes/ggml-silero-v6.2.0.bin` | Pinned 885,098-byte speech model, 0644 |
 | `/usr/sbin/moto-hermes-pet.py` | Original fullscreen canvas |
 | `/usr/sbin/moto-hermes.py` | Private configuration / process boundary |
@@ -222,6 +218,14 @@ The optional companion's file layout is:
 | `/usr/sbin/moto-capture.py` | Shared capture ownership |
 | `/usr/sbin/moto-voice.py`, `/usr/sbin/moto-panel.py` | Matching sources from the same revision |
 | `/usr/sbin/moto-shell` | Executable copy of matching `moto-shell.py` |
+
+For an upgrade from the former local-ASR version, back up and verify all changed
+files first. Install matching Rust/native modules and the Silero detector/model;
+restart only the GUI with the app closed, preserving tmux/configuration. After
+verifying the replacement, remove the obsolete `moto-wake`,
+`ggml-base-q5_1.bin` and `ggml-tiny-q5_1.bin` if installed. These are not required
+by the Groq path. Keep the verified userspace backup for rollback. Do not change
+firmware, audio services, network policy or the Hermes server for this update.
 
 The regular [clean userspace assembler](../scripts/assemble-userspace.py)
 automatically includes the Python modules. The Rust binary is optional and is
@@ -337,8 +341,8 @@ own authentication. The app does not copy VPN state or change SSH users.
    acknowledgment, then ask your question.
 2. With that option disabled, the face instead waits for **Olá Hermes**.
    Say the phrase alone and wait for the acknowledgment. That activation clip
-   is discarded; the actual request must follow it. This local recognition
-   remains experimental; opening activation does not establish its accuracy.
+   goes to Groq for recognition, then is discarded; the actual request must
+   follow the acknowledgment. It is never an agent request.
 3. Speak normally. After approximately 700 ms of detected silence, the app
    transcribes the bounded utterance (up to 45 seconds), asks your Hermes and
    speaks its reply. It automatically listens again, with no button or repeated
@@ -348,7 +352,7 @@ own authentication. The app does not copy VPN state or change SSH users.
    kept on the server. Switching is blocked while a task is running/uncertain;
    failed creation keeps the previous context. An interrupted creation can leave
    an empty server conversation; the app never guesses a successful new ID.
-5. Say **Voltar a dormir** to return to local activation, or **Fechar aplicativo**
+5. Say **Voltar a dormir** to return to waiting for activation, or **Fechar aplicativo**
    / **Voltar ao terminal** to close the app. The × also exits. Long press or ···
    opens secondary controls, setup and text/history. Exact commands are handled
    before the LLM; a sentence merely mentioning “nova conversa” stays a request.
@@ -361,7 +365,7 @@ Capture pauses while transcribing, waiting for Hermes and speaking. Listening
 resumes 400 ms after playback completion; interruption over the speaker/AEC is
 not established. Closing, opening setup and screen blanking stop local capture;
 closed apps do not keep hearing. Screen-off remains backlight blanking, not
-suspend/locking. Voice commands after activation use Groq, so network failures
+suspend/locking. Activation and voice commands use Groq, so network failures
 can prevent those commands; ×/hardware screen controls remain available.
 
 Blanking pauses the microphone, playback and animation, while keeping the
@@ -399,8 +403,8 @@ acknowledgment does not rerun or undo the operation.
 | Login redirect refused | Check umbrelOS version and the explicitly allowed auth origin, app ID and public URL. |
 | Password works in browser but not app | Confirm account ID and version. The preview supports the inspected Umbrel 2.0 protocol, not arbitrary SSO/older proxy cookies. |
 | Code field appears | This account's server requires 2FA; supply the current code for that account. |
-| Wake component/model missing | Build/install both verified artifacts; the listener refuses corrupt models and does not upload standby audio. |
-| Wake slow or misses speech | Measure actual pt-BR pronunciation/distance and CPU/heat. This general recognition model is experimental; host synthetic results do not prove device usability. |
+| Speech detector/model missing | Install matching `moto-vad` and Silero model; missing/corrupt assets fail closed before upload. |
+| Wake slow or misses speech | Check Groq connectivity/quota and the sanitized wake verdict. Measure the real microphone and owner voice; synthetic checks do not establish physical usability. |
 | Microphone busy | Finish another dictation/recording. Both use the same inherited capture lease. Do not kill unrelated ALSA processes. |
 | Groq failure | Check that this phone has its own valid Groq key, internet and quota. Record again; no automatic upload retry occurs. |
 | Text works but voice fails | Check Edge provider/dependencies and pt-BR voice on the selected Hermes profile, then the existing ALSA speaker route. An unknown/non-Edge verdict stops speech before opening the speech socket. Keep server profile settings fixed while speaking; this preflight is not an atomic server-side provider lock. |
@@ -420,38 +424,16 @@ creates/resumes a conversation; an empty chat before accepted activation does
 not establish a server fault.
 
 The private `hermes-voice-diagnostic.json`, next to `hermes.json`, retains only
-the latest decision: accepted/phrase-match booleans, probability/no-speech scores
-and inference milliseconds; raw capture duration (`capture_ms`), integer
-RMS/peak in signed-16 sample units and `clipped_samples` (absolute value >=32760).
-These measure raw 48 kHz capture before resampling. Capture duration is distinct
-from inference time. No recognized words, audio, address or session identity are
-retained. A phrase match with low confidence differs from a phrase mismatch;
-neither justifies uploading standby audio to Groq or blindly loosening thresholds.
+the latest Groq decision: `recognizer: "groq"`, `accepted` and `characters`.
+No recognized words, audio, address or session identity are retained. A rejected
+wake transcript returns to standby without speaking or contacting the agent.
+Groq errors stay visible while local listening rearms; uploads are not retried
+automatically. Check the key, connection and quota before repeating the phrase.
 
-Wake conversion uses a 129-tap Blackman-windowed low-pass at 7 kHz before
-48-to-16 kHz decimation, preserving timing and sample count. This prevents
-high-frequency noise folding into speech; it does not establish wake accuracy.
-The [Whisper loader also resamples before inference](https://github.com/openai/whisper/blob/main/whisper/audio.py).
-Real microphone/voice acceptance remains required after the synthetic chain
-review in [Testing](../tests/README.md).
-
-The current wake recognizer uses multilingual **base q5_1**. The earlier tiny
-model failed acoustic wake recognition even when its digital fixture passed.
-The neural verifier and wake recognizer each normalize their own candidate input
-peak toward 0.9 with at most 12× gain, to handle the quiet native microphone.
-The wake recognizer supplies the proper-name spelling hint `Hermes.`. It does
-not force a wake sentence or retain earlier transcript context. WebRTC, the
-near-silence floor and raw capture measurements retain the original amplitude;
-the model gains do not compound. Acceptance still requires
-the whole wake phrase and the existing confidence/no-speech thresholds; repeating
-only that phrase is one activation. The wake model is released after activation
-while conversation continues through Groq.
-
-Update the Rust runtime, `moto-wake` helper and base model together. A tiny model
-at the old path does not satisfy the new hash. For isolated reviews,
-`MOTO_HERMES_WAKE_BINARY` and `MOTO_HERMES_WAKE_MODEL` select staged assets; model
-hash verification remains mandatory. These are local process overrides, not
-server or GUI configuration fields.
+The listener uses a low-pass/downsampling step only for the Silero speech
+detector. It passes a private WAV to the network worker for Groq interpretation,
+then pauses capture during that request. It holds no HTTP client or Groq key.
+There is no local-ASR model, local transcript or ASR fallback.
 
 ### Unsolicited replies or a conversation loop
 

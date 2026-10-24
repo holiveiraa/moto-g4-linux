@@ -44,10 +44,11 @@ cargo build --release --locked
 
 `--smoke` performs a small runtime test without an account or recording.
 `--face-stdio` renders compact local poses without network/configuration.
-`--listen --device hw:C,D` is a separate local-only capture/VAD/wake process.
-It requires the pinned wake model/bridge and matching `moto-vad`/Silero speech
-verifier, built by `scripts/build-wake.py` in the parent project. The listener never creates an HTTP client
-or uploads activation audio. Capture stops when the app closes.
+`--listen --device hw:C,D` is a separate local-only capture/VAD process.
+It requires matching `moto-vad`/Silero assets built by `scripts/build-hearing.py`.
+It never creates an HTTP client or holds credentials: the network worker sends
+voiced clips to Groq, including standby activation. Silence stays local.
+There is no local speech recognizer or ASR model. Capture stops on closing.
 `--stdio --config <private-config.json>` is a private JSON-lines interface used
 by the panel; credentials travel through stdin, never command arguments.
 Do not run it in a terminal while manually entering secrets. See

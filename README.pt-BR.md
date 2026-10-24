@@ -8,7 +8,8 @@
 
 Abra o app: ele espera em silêncio por **“Olá Hermes”**. Depois da confirmação,
 faça seu pedido; ele responde e volta a ouvir. Cada candidato de fala passa pela
-verificação local Silero antes da transcrição. Fechou o app, volta ao terminal.
+verificação local Silero antes da transcrição na Groq, inclusive antes da
+ativação. Silêncio fica local. Fechou o app, volta ao terminal.
 **Começar a conversa ao abrir** é uma alternativa opcional; deixe desmarcada
 para esperar a frase de ativação, cujo reconhecimento continua experimental.
 Uma segunda vida para o Moto G4 Plus: um companheiro animado em tela cheia e
@@ -38,8 +39,8 @@ A imagem do Hermes foi capturada no Moto; terminal e painel foram renderizados
 em Linux a partir do fonte atual. Não representam uma conversa real já validada.
 [Galeria e procedência das imagens](docs/screenshots.md).
 
-- **“Olá Hermes”**: ativação local, somente enquanto o app está aberto.
-- **Conversa sem apertar botão**: Groq transcreve as falas após ativação; o
+- **“Olá Hermes”**: reconhecimento pela Groq, somente com o app aberto.
+- **Conversa sem apertar botão**: Groq transcreve a ativação e os pedidos; o
   próprio Hermes usa Edge TTS para responder. A conversa exige internet.
 - **Seu agente existente**: usa o perfil escolhido, com uma conversa própria
   do Moto, mantida ao fechar e reabrir. Não se mistura com o Telegram.
@@ -52,13 +53,12 @@ em Linux a partir do fonte atual. Não representam uma conversa real já validad
 - **Umbrel sem HTTPS**: use HTTP pelo IP Tailscale e pela porta existente do
   app. O cliente verifica a VPN e restringe HTTP/WS a ela, sem mudar o servidor.
 
-**Estado experimental:** instalado no Moto de referência. Groq → Hermes → Edge
-passou com serviços reais. O modelo base atual passou uma ativação e uma pergunta
-sintéticas reproduzidas pelo alto-falante e captadas pelo microfone, seguidas de
-60 segundos na escuta sem novo envio. Os testes anteriores com a voz do dono
-falharam no modelo tiny; a aceitação do modelo novo com essa voz, calor e
-autonomia ainda precisam de verificação.
-[Resultados e limites](docs/status.md#acoustic-wake-model-correction--24-october).
+**Estado experimental:** Groq reconhece a ativação e os pedidos; não há
+transcrição local no Motorola. O fluxo Groq → Hermes → Edge passou com serviços
+reais e fala sintética pelo microfone/alto-falante, incluindo rejeição antes da
+ativação e 60 segundos sem envio extra depois da resposta. A voz do dono no uso
+real, calor e autonomia ainda precisam de verificação.
+[Resultados e limites](docs/status.md#groq-activation--24-october).
 
 ## Configure os dois lados
 

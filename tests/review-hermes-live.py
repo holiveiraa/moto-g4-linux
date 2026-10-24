@@ -54,8 +54,9 @@ def fake_capture(folder):
         say('question.wav')
     elif not app_open and number == 1:
         say('negative.wav')
-        say('wake.wav')
     elif not app_open and number == 2:
+        say('wake.wav')
+    elif not app_open and number == 3:
         say('question.wav')
     # Speech-shaped noise below the measured front-end floor must not create
     # another transcription/agent turn after the reply has rearmed capture.
@@ -132,16 +133,20 @@ def main():
         backend.CONFIG = config/source.name
         backend.CAPTURE_DIAGNOSTIC = folder/'runtime/capture.json'
         backend.BINARY = str(args.binary.resolve(strict=True))
-        commands = []; events = []; failures = []; phases = []; activations = []; played_counts = []; listening_modes = []; speech_decisions = []
+        commands = []; events = []; failures = []; phases = []; activations = []; played_counts = []; listening_modes = []; speech_decisions = []; transcription_scopes = []; wake_verdicts = []
+        negative_used = args.activation=='wake-word' and (not args.physical_audio or args.physical_negative_first)
+        expected_wake = 0 if args.activation=='app-open' else (2 if negative_used else 1)
         original_worker = backend.Worker
         class ObservedWorker(original_worker):
             # Observe real commands/events, without replacing worker behavior.
             def send(self, value):
                 if self.arguments[0] != '--face-stdio': commands.append(value.get('cmd'))
+                if value.get('cmd') == 'transcribe': transcription_scopes.append(value.get('scope','conversation'))
                 super().send(value)
             def deliver(self, value, generation=None):
                 name = value.get('event')
                 if name == 'speech_checked': speech_decisions.append(value.get('decision'))
+                if name == 'wake_transcript': wake_verdicts.append(value.get('accepted') is True)
                 if name == 'voice_listening': listening_modes.append(value.get('mode'))
                 if name == 'spoken': played_counts.append(json.loads((config/'hermes-speech-diagnostic.json').read_text())['bytes'])
                 if name == 'wake': activations.append(value.get('source'))
@@ -183,7 +188,7 @@ def main():
             while time.monotonic() < deadline:
                 shell.root.update(); time.sleep(.005)
                 if failures: raise RuntimeError('Chain failed at '+repr(failures)+'; events='+repr(events))
-                if 'wake_checked' in events and 'wake' not in events and app.notice == 'Diga “Olá Hermes”':
+                if False in wake_verdicts and 'wake' not in events and not app.transcribing and app.notice == 'Diga “Olá Hermes”':
                     if 'rejected_wake_restored' not in phases: phases.append('rejected_wake_restored')
                 if args.physical_audio:
                     now = time.monotonic()
@@ -217,28 +222,31 @@ def main():
                         and app.notice == 'Pode falar'):
                     if quiet_until is None: quiet_until = time.monotonic()+args.idle_seconds
                     if time.monotonic() >= quiet_until: break
-                if commands.count('transcribe') > 1 or commands.count('send') > 1:
+                if (transcription_scopes.count('conversation') > 1 or commands.count('send') > 1
+                        or transcription_scopes.count('wake') > expected_wake):
                     raise RuntimeError('Unsolicited turn during rearmed idle observation')
             else: raise RuntimeError('Chain timed out; event names='+repr(events)+'; commands='+repr(commands))
             if args.activation=='wake-word' and (not args.physical_audio or args.physical_negative_first): assert 'rejected_wake_restored' in phases
-            assert activations == ['app_open' if args.activation=='app-open' else 'wake_word']
+            assert activations == ['app_open' if args.activation=='app-open' else 'groq']
             for name in ('connected','wake','utterance','transcript','reply'): assert name in events, name
-            assert events.index('wake') < events.index('utterance') < events.index('transcript') < events.index('reply')
-            assert commands.count('transcribe') == 1 and commands.count('send') == 1
+            assert events.index('wake') < events.index('transcript') < events.index('reply')
+            if args.activation=='wake-word':
+                assert events.index('utterance') < events.index('wake_transcript') < events.index('wake')
+            assert transcription_scopes.count('wake') == expected_wake
+            assert transcription_scopes.count('conversation') == 1 and commands.count('send') == 1
             assert app.awake and not (app.pending or app.transcribing or app.speech_active)
             assert app.notice == 'Pode falar'
             counts = played_counts if args.physical_audio else [int(n) for n in (folder/'playback-counts').read_text().splitlines()]
             assert len(counts) == 2 and all(n > 0 for n in counts)
             speech = json.loads((config/'hermes-speech-diagnostic.json').read_text())
             assert speech['outcome'] == 'completed' and speech['bytes'] == counts[-1]
-            negative_used = args.activation=='wake-word' and (not args.physical_audio or args.physical_negative_first)
             print(json.dumps({'passed':True,'live_services':['Groq','Hermes','Edge'],
                 'transcript_checked':args.expected_transcript is not None,
                 'synthetic_microphone':not args.physical_audio,'synthetic_speaker':not args.physical_audio,
                 'physical_audio':args.physical_audio,'activation':args.activation,
                 'negative_stimulus_used':negative_used,
                 'negative_wake_restored':negative_used and 'rejected_wake_restored' in phases,
-                'postwake_transcriptions':1,'agent_turns':1,'audio_bytes':counts,
+                'wake_transcriptions':expected_wake,'postwake_transcriptions':1,'agent_turns':1,'audio_bytes':counts,
                 'speech_sample_rate':speech['sample_rate'],'largest_reply_chunk':speech['largest_chunk'],
                 'rearmed':True,'idle_without_extra_turn_seconds':args.idle_seconds}),flush=True)
         finally:
