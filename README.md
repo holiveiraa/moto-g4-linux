@@ -20,13 +20,15 @@
 ## Bring your Hermes to life
 
 Open **Painel → Hermes** and the terminal gives way to an animated character.
-Enable **Começar a conversa ao abrir** in setup to start directly: opening the
-app becomes activation, it says hello and then listens to your question. Existing
-settings keep that option off. With it off, use the experimental local path:
-Say **“Olá Hermes”**, wait for its spoken acknowledgment, then talk naturally:
+By default it waits quietly for local activation. Say **“Olá Hermes”**, wait
+for its spoken acknowledgment, then talk naturally:
 it listens when you finish, asks **your existing Hermes Agent**, speaks the reply
 and listens again. Say **“Nova conversa”** to change context or **“Voltar ao
 terminal”** to close the app and return to your terminal sessions.
+
+An optional **Começar a conversa ao abrir** setting makes opening the app itself
+activate the conversation. Leave it off to wait for “Olá Hermes”. Every audio
+candidate is checked locally with Silero before wake recognition or transcription.
 
 <p align="center">
   <img src="docs/assets/hermes.png" alt="Hermes fullscreen face in its listening state" width="240">

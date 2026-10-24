@@ -40,6 +40,7 @@ def main():
         receiver.write_text('#!/bin/sh\nstty -echo -icanon\ncat > '+str(sink)+'\n'); receiver.chmod(0o700)
         assert tmux('-f','/dev/null','new-session','-d','-s','moto',str(receiver)).returncode == 0
         backend.CONFIG=private/'config/hermes.json'
+        backend.CAPTURE_DIAGNOSTIC=private/'runtime/capture.json'
         backend.BINARY=os.environ['MOTO_HERMES_BINARY']
         backend.save_config(dict(backend.DEFAULTS,server_url='http://127.0.0.1:9/',auto_speak=False))
         original_worker=backend.Worker

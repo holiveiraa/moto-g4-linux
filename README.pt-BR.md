@@ -6,10 +6,11 @@
 
 **Seu Hermes com rosto e voz. Seu terminal Linux sempre à mão.**
 
-Para abrir e já conversar, marque **Começar a conversa ao abrir** na configuração.
-O bichinho conecta, diz “Olá! Estou ouvindo.” e escuta sua pergunta. Fechou o app,
-volta ao terminal. A opção é explícita e fica desmarcada em configurações antigas;
-o reconhecimento local de “Olá Hermes” continua experimental.
+Abra o app: ele espera em silêncio por **“Olá Hermes”**. Depois da confirmação,
+faça seu pedido; ele responde e volta a ouvir. Cada candidato de fala passa pela
+verificação local Silero antes da transcrição. Fechou o app, volta ao terminal.
+**Começar a conversa ao abrir** é uma alternativa opcional; deixe desmarcada
+para esperar a frase de ativação, cujo reconhecimento continua experimental.
 Uma segunda vida para o Moto G4 Plus: um companheiro animado em tela cheia e
 um terminal de verdade, com teclado de toque, abas persistentes, SSH e Tailscale.
 O protótipo usa Alpine Linux, Xorg e xterm/tmux e liga sem um PC.

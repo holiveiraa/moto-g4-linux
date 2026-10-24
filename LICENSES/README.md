@@ -11,6 +11,7 @@
 | Rust companion dependencies | Their individual Cargo license declarations and upstream notices; `Cargo.lock` pins source packages, and the build helper collects license metadata/notices for review |
 | Local voice recognizer/model | Downloaded whisper.cpp/Whisper inputs retain MIT notices; `scripts/build-wake.py` verifies pins and collects upstream notices separately. Not bundled in Git. |
 | WebRTC VAD | Rust wrapper and bundled libfvad retain their individual MIT/BSD-style notices, collected with Rust dependency sources |
+| Silero VAD model / verifier | [Silero Team MIT license](silero-vad-MIT.txt); pinned upstream ggml conversion and whisper.cpp retain their own notices. Downloaded during build, not bundled in Git. |
 | Proprietary firmware / calibration / OEM images | Not included and no redistribution grant is asserted |
 
 The original README/artwork/docs are covered by MIT for straightforward reuse.

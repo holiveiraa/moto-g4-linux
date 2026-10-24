@@ -8,19 +8,15 @@ The main screen has a face and short state captions, with a discreet options
 menu. Rust owns hearing/network/speech/animation; Tk hosts the native canvas and
 setup/password fields.
 
-**Status: experimental app installed on the reference Moto.** All **52 Rust
-fixtures**, **18 companion Python regressions** and the fullscreen Tk/XTest/tmux
-review passed directly on that Moto, in addition to host checks. The userspace
-compatibility updates were installed transactionally and independently
-checked by hash/size/mode. Runtime smoke passed, personal configuration was
-preserved and tmux `@0` survived the GUI restart. A credential-free probe through
-the Moto's existing Tailscale reached Umbrel's real app-login boundary over HTTP.
-Synthetic local recognition took 1.326–1.906 seconds per sample, with roughly
-78 MB resident memory. The full chain now passes on that Moto using synthetic
-microphone/speaker input and real Groq, Hermes and Edge services, including
-automatic listening afterward. Actual-owner wake accuracy, physical spoken
-conversation and heat/battery remain open gates. Real Umbrel login and
-Moto-session creation are confirmed on the reference installation.
+**Status: experimental app on the reference Moto.** Current verification includes
+56 Rust fixtures, 124 offline Python regressions and isolated native GUI reviews.
+The real Groq/Hermes/Edge chain also passed with a known question played through
+the physical speaker and microphone, followed by 60 seconds of rearmed listening
+without an extra transcription or agent request. Local speech verification now
+uses Silero before either wake recognition or Groq. This bounded observation is
+not a guarantee for every room or voice. Owner-voice wake acceptance and
+heat/battery remain open gates. Real Umbrel login and Moto-session creation are
+confirmed on the reference installation.
 See [status](status.md) and [research/design](hermes-assistant.md).
 There is no universal installer.
 
@@ -126,8 +122,8 @@ workflow, including for diagnostics.
 - Linux/WSL for builds, with source/build outputs on the Linux filesystem.
   Windows can continue owning USB. Normal builds never contact a device.
 
-Standby activation runs locally using WebRTC VAD and a pinned multilingual
-Whisper tiny model. The activation clip is discarded, never uploaded. After
+Standby activation runs locally using WebRTC endpointing, a pinned Silero speech
+verifier and a pinned multilingual Whisper tiny model. The activation clip is discarded, never uploaded. After
 acknowledgment, each utterance is sent to Groq when speech ends automatically.
 Replies reach the server's online Edge service after its provider verdict is
 confirmed. Both normal transcription and speech synthesis require internet.
@@ -195,9 +191,10 @@ python3 scripts/build-wake.py --target host
 python3 scripts/build-wake.py --target aarch64-linux-musl
 ```
 
-The helper verifies the source archive and multilingual `ggml-tiny-q5_1.bin`
+The helper verifies the source archive, multilingual `ggml-tiny-q5_1.bin`
+and `ggml-silero-v6.2.0.bin`
 against [pinned hashes](../companion/wake/pins.json), builds a static CPU-only
-`moto-wake`, and collects project/upstream notices. Downloads/builds remain in a
+`moto-wake` and `moto-vad`, and collects project/upstream/model notices. Downloads/builds remain in a
 separate Linux work folder. The model is 32,152,673 bytes; budget additional
 runtime memory and measure actual heat/latency before accepting wake behavior.
 No Python speech framework or model download runs on the phone at app startup.
@@ -216,7 +213,9 @@ The optional companion's file layout is:
 | --- | --- |
 | `/usr/local/bin/moto-hermes` | Verified ARM64 Rust artifact, 0755 |
 | `/usr/local/bin/moto-wake` | Verified static ARM64 recognizer artifact, 0755 |
+| `/usr/local/bin/moto-vad` | Matching static ARM64 Silero verifier, 0755 |
 | `/usr/local/share/moto-hermes/ggml-tiny-q5_1.bin` | Hash-verified model, 0644 |
+| `/usr/local/share/moto-hermes/ggml-silero-v6.2.0.bin` | Pinned 885,098-byte speech model, 0644 |
 | `/usr/sbin/moto-hermes-pet.py` | Original fullscreen canvas |
 | `/usr/sbin/moto-hermes.py` | Private configuration / process boundary |
 | `/usr/sbin/moto-hermes-panel.py` | Existing panel's app host |
@@ -435,6 +434,33 @@ high-frequency noise folding into speech; it does not establish wake accuracy.
 The [Whisper loader also resamples before inference](https://github.com/openai/whisper/blob/main/whisper/audio.py).
 Real microphone/voice acceptance remains required after the synthetic chain
 review in [Testing](../tests/README.md).
+
+### Unsolicited replies or a conversation loop
+
+Install matching Rust/native modules, `moto-vad` and its pinned Silero model.
+The listener now verifies every WebRTC candidate locally before either wake
+recognition or Groq. Quiet input previously produced WebRTC false positives;
+Groq then returned words even with misleadingly confident metadata. Raising
+the energy threshold alone failed the longer physical idle test.
+
+The near-silence/DC floor is 32 signed-16 RMS units (about -60 dBFS); it is only
+a prefilter. Silero uses its standard 0.5 speech threshold and requires eight
+32 ms windows (256 ms), alongside the existing endpointing. Rejected candidates
+stay local and silently return to listening. Missing/corrupt model/helper fails
+closed with a visible local error. It must never fall back to uploading noise.
+
+Private `/run/moto-hermes-diagnostics/capture.json` and `speech.json` retain only
+the latest counters, energy floor/maximum RMS, accept/reject decision and timing.
+The capture snapshot updates every five seconds of active capture; these files
+are volatile, owner-only and contain no audio, words, endpoint or conversation
+identity. Do not publish owner diagnostics. For isolated native reviews only,
+`MOTO_HERMES_VAD_BINARY` and `MOTO_HERMES_VAD_MODEL` select staged assets; the model
+hash remains mandatory. Normal launches use the fixed installed locations.
+
+Keep **Começar a conversa ao abrir** off to open quietly and wait for **Olá
+Hermes**. After acknowledgment, normal turns need no repeated wake word. During
+Hermes's speech the microphone is paused until playback drains; silence is not
+a request and must not cause another greeting or agent submission.
 
 ### Speech transport and safe diagnostics
 

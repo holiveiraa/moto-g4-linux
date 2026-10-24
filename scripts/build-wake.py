@@ -56,6 +56,9 @@ def main():
     model_license = ROOT/'LICENSES/whisper-model-MIT.txt'
     if digest(model_license) != pins['model_license_sha256']:
         raise SystemExit('Preserved model license failed its pinned hash.')
+    vad_license = ROOT/'LICENSES/silero-vad-MIT.txt'
+    if digest(vad_license) != pins['vad_license_sha256']:
+        raise SystemExit('Preserved VAD license failed its pinned hash.')
     tools = json.loads((ROOT/'companion/toolchains.json').read_text())
     if not zig or subprocess.check_output([zig,'version'],text=True).strip() != tools['zig']:
         raise SystemExit('Use pinned Zig '+tools['zig']+'.')
@@ -75,6 +78,9 @@ def main():
     model = cache/pins['model']
     fetch('https://huggingface.co/ggerganov/whisper.cpp/resolve/'+pins['model_revision']+'/'+pins['model'],
           model, pins['model_sha256'], 40*1024*1024)
+    vad_model = cache/pins['vad_model']
+    fetch('https://huggingface.co/ggml-org/whisper-vad/resolve/'+pins['vad_model_revision']+'/'+pins['vad_model'],
+          vad_model, pins['vad_model_sha256'], 2*1024*1024)
     work = root/(time.strftime('%Y%m%d-%H%M%S')+'-'+os.urandom(4).hex())
     work.mkdir()
     with tarfile.open(archive) as source:
@@ -102,9 +108,12 @@ def main():
     artifact = work/'artifact'
     artifact.mkdir()
     shutil.copy2(work/'build/moto-wake', artifact/'moto-wake')
+    shutil.copy2(work/'build/moto-vad', artifact/'moto-vad')
     shutil.copy2(model, artifact/model.name)
+    shutil.copy2(vad_model, artifact/vad_model.name)
     shutil.copy2(ROOT/'LICENSE', artifact/'PROJECT-LICENSE')
     shutil.copy2(model_license, artifact/'MODEL-LICENSE')
+    shutil.copy2(vad_license, artifact/'VAD-MODEL-LICENSE')
     for file in upstream.rglob('*'):
         if file.is_file() and not file.is_symlink() and file.name.lower().startswith(('license','copying','notice')):
             destination = artifact/'upstream-notices'/file.relative_to(upstream)
@@ -120,6 +129,9 @@ def main():
               'helper_bytes':(artifact/'moto-wake').stat().st_size,
               'model_bytes':model.stat().st_size,
               'source_sha256':digest(own/'wake.cpp'),
+              'vad_source_sha256':digest(own/'vad.cpp'),
+              'vad_helper_sha256':digest(artifact/'moto-vad'),
+              'vad_helper_bytes':(artifact/'moto-vad').stat().st_size,
               'validation':'Compiled only. Wake accuracy, latency and heat need device measurement.'}
     (artifact/'build.json').write_text(json.dumps(result,indent=2)+'\n')
     print('Built local recognizer:', artifact)

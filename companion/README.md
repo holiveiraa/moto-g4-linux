@@ -45,8 +45,8 @@ cargo build --release --locked
 `--smoke` performs a small runtime test without an account or recording.
 `--face-stdio` renders compact local poses without network/configuration.
 `--listen --device hw:C,D` is a separate local-only capture/VAD/wake process.
-It requires the pinned model and separately built whisper.cpp bridge; see
-`scripts/build-wake.py` in the parent project. It never creates an HTTP client
+It requires the pinned wake model/bridge and matching `moto-vad`/Silero speech
+verifier, built by `scripts/build-wake.py` in the parent project. The listener never creates an HTTP client
 or uploads activation audio. Capture stops when the app closes.
 `--stdio --config <private-config.json>` is a private JSON-lines interface used
 by the panel; credentials travel through stdin, never command arguments.

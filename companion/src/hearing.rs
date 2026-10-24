@@ -119,7 +119,13 @@ pub fn action(text: &str) -> Option<&'static str> {
     }
 }
 
-/// Bounded automatic endpointing. Noise/silence never invokes recognition.
+// Native S16 capture on the reference Moto produced false WebRTC candidates
+// at RMS 13-41 while its speaker was idle. This -60.2 dBFS floor removes
+// near-digital silence/DC only; Silero verifies every remaining candidate.
+// An energy threshold alone did not pass the physical idle-loop test.
+const MIN_VOICE_RMS: f64 = 32.0;
+
+/// Bounded endpointing with a local energy floor as well as WebRTC VAD.
 pub struct Segmenter {
     vad: webrtc_vad::Vad,
     lead: VecDeque<i16>,
@@ -128,6 +134,10 @@ pub struct Segmenter {
     voiced: usize,
     quiet: usize,
     max_samples: usize,
+    frames: u64,
+    raw_voice_frames: u64,
+    gated_voice_frames: u64,
+    max_rms: f64,
 }
 impl Segmenter {
     pub fn new(seconds: usize) -> Self {
@@ -142,6 +152,10 @@ impl Segmenter {
             voiced: 0,
             quiet: 0,
             max_samples: seconds.clamp(1, 45) * 48000,
+            frames: 0,
+            raw_voice_frames: 0,
+            gated_voice_frames: 0,
+            max_rms: 0.0,
         }
     }
     pub fn feed(&mut self, frame: &[i16]) -> Option<Vec<i16>> {
@@ -152,6 +166,17 @@ impl Segmenter {
         self.feed_decision(frame, speech)
     }
     fn feed_decision(&mut self, frame: &[i16], speech: bool) -> Option<Vec<i16>> {
+        let mean = frame.iter().map(|s| *s as f64).sum::<f64>() / frame.len() as f64;
+        let power = frame
+            .iter()
+            .map(|s| (*s as f64 - mean).powi(2))
+            .sum::<f64>()
+            / frame.len() as f64;
+        self.frames += 1;
+        self.raw_voice_frames += u64::from(speech);
+        let speech = speech && power >= MIN_VOICE_RMS.powi(2);
+        self.gated_voice_frames += u64::from(speech);
+        self.max_rms = self.max_rms.max(power.sqrt());
         if self.audio.is_empty() {
             self.lead.extend(frame);
             while self.lead.len() > FRAME_SAMPLES * 15 {
@@ -188,11 +213,36 @@ impl Segmenter {
         }
         None
     }
+
+    /// Counters only: no audio, transcript, key, server or conversation identity.
+    pub fn health(&self) -> Value {
+        serde_json::json!({"frames":self.frames,"raw_voice_frames":self.raw_voice_frames,
+            "gated_voice_frames":self.gated_voice_frames,"max_rms":self.max_rms.round() as u64,
+            "min_voice_rms":MIN_VOICE_RMS as u64})
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn signal(amplitude: i16) -> Vec<i16> {
+        (0..FRAME_SAMPLES)
+            .map(|i| if i % 2 == 0 { amplitude } else { -amplitude })
+            .collect()
+    }
+    #[test]
+    fn low_level_noise_and_dc_are_not_utterances_even_if_vad_says_voice() {
+        let mut vad = Segmenter::new(1);
+        let noise: Vec<i16> = (0..FRAME_SAMPLES)
+            .map(|i| if i % 2 == 0 { 24 } else { -24 })
+            .collect();
+        for _ in 0..300 {
+            assert!(vad.feed_decision(&noise, true).is_none());
+        }
+        for _ in 0..300 {
+            assert!(vad.feed_decision(&[2000; FRAME_SAMPLES], true).is_none());
+        }
+    }
     #[test]
     fn endpointing_needs_speech_then_silence_and_never_runs_on_silence() {
         let mut vad = Segmenter::new(45);
@@ -200,7 +250,7 @@ mod tests {
             assert!(vad.feed_decision(&[0; FRAME_SAMPLES], false).is_none());
         }
         for _ in 0..25 {
-            assert!(vad.feed_decision(&[1500; FRAME_SAMPLES], true).is_none());
+            assert!(vad.feed_decision(&signal(1500), true).is_none());
         }
         let mut result = None;
         for _ in 0..36 {
@@ -215,14 +265,14 @@ mod tests {
     fn brief_clicks_are_discarded_and_long_audio_is_bounded() {
         let mut vad = Segmenter::new(1);
         for _ in 0..4 {
-            assert!(vad.feed_decision(&[2000; FRAME_SAMPLES], true).is_none());
+            assert!(vad.feed_decision(&signal(2000), true).is_none());
         }
         for _ in 0..40 {
             assert!(vad.feed_decision(&[0; FRAME_SAMPLES], false).is_none());
         }
         let mut found = None;
         for _ in 0..60 {
-            if let Some(a) = vad.feed_decision(&[2000; FRAME_SAMPLES], true) {
+            if let Some(a) = vad.feed_decision(&signal(2000), true) {
                 found = Some(a);
                 break;
             }

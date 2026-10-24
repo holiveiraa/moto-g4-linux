@@ -60,6 +60,24 @@ class CaptureOwnership(unittest.TestCase):
 
 
 class CompanionFiles(unittest.TestCase):
+    def test_capture_health_saves_counters_only_and_discards_stale_epochs(self):
+        app = self.app()
+        with tempfile.TemporaryDirectory() as folder, patch.object(self.h.backend, 'CAPTURE_DIAGNOSTIC', Path(folder)/'runtime/capture.json'):
+            metrics = {'frames':250,'raw_voice_frames':63,'gated_voice_frames':0,
+                       'max_rms':24,'min_voice_rms':64,'text':'private noise words','audio':'private audio'}
+            app.voice_event({'event':'capture_health','voice_epoch':app.voice_epoch,'metrics':metrics})
+            path = Path(folder)/'runtime/capture.json'
+            self.assertEqual(json.loads(path.read_text()), {k:v for k,v in metrics.items() if k not in ('text','audio')})
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            app.voice_event({'event':'capture_health','voice_epoch':app.voice_epoch+1,'metrics':{'frames':500}})
+            self.assertEqual(json.loads(path.read_text())['frames'],250)
+            app.worker.send.assert_not_called()
+            app.voice_event({'event':'speech_checked','voice_epoch':app.voice_epoch,'decision':{
+                'accepted':False,'speech_ms':0,'max_run_ms':0,'milliseconds':8,'text':'private words'}})
+            self.assertEqual(json.loads(path.with_name('speech.json').read_text()),
+                             {'accepted':False,'speech_ms':0,'max_run_ms':0,'milliseconds':8})
+            app.worker.send.assert_not_called()
+
     def test_replaying_a_known_answer_never_submits_another_agent_turn(self):
         from unittest.mock import Mock
         app = self.app()

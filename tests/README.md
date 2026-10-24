@@ -88,6 +88,11 @@ real Groq configuration or Tailscale identity to create a screenshot.
 
 ## Opt-in live Hermes voice chain
 
+`review-vad.py --binary /path/to/moto-vad --model /path/to/ggml-silero-v6.2.0.bin
+--speech-wav /path/to/known-synthetic-16k.wav` is a separate native-only check.
+It rejects silence/low noise, accepts the supplied known speech and checks
+reset between packets. It uses no microphone, speaker, account or network.
+
 Supply `--expected-transcript "your known synthetic question"` to verify
 recognized content as well as event ordering. A mismatch fails before sending
 it to the agent and reports no returned words. Without this option, a pass
@@ -99,6 +104,9 @@ of the local wake recognizer. This verifies the actual GUI → listener activati
 spoken acknowledgment, question, reply and rearming. Its capture fixture starts
 with the question and must not pretend a wake-word candidate was recognized.
 The default `--activation wake-word` still checks local rejection/acceptance.
+After rearming, the fixture feeds low-level speech-shaped noise and observes
+five seconds with no extra transcription or agent submission. Use
+`--idle-seconds 60` for a longer observation (allowed range 5-90 seconds).
 
 `review-hermes-live.py` exercises the actual Tk controller, Rust network worker,
 local VAD/recognizer/model and real Groq → Hermes → Edge services in one chain.
@@ -110,7 +118,9 @@ the owner's voice or physical microphone/speaker performance.
 
 Run only with the owner's authorization to use those services. Close the
 production Hermes app, stage reviewed modules and binary together, then start
-a private Xvfb display. The local recognizer/model must already be installed.
+a private Xvfb display. The local recognizer/model and matching Silero verifier
+must already be installed, or selected through the staged VAD review overrides
+documented in [setup](../docs/hermes-setup.md#unsolicited-replies-or-a-conversation-loop).
 Supply three synthetic mono 16 kHz S16 WAVs: a non-wake phrase, “Olá Hermes”
 and a harmless question. Do not use personal recordings in a published fixture.
 

@@ -117,7 +117,13 @@ do telefone têm permissões restritas; não são um cofre criptografado.
 
 ## 5. Faça a primeira conversa
 
-Para começar assim que abrir o bichinho, marque **Começar a conversa ao abrir**
+Para abrir em silêncio e esperar **“Olá Hermes”**, deixe **Começar a conversa ao
+abrir** desmarcado. Depois da ativação, converse sem repetir a frase a cada
+pergunta. Sem fala, ele permanece quieto na escuta. O cliente verifica cada
+candidato de fala localmente com Silero antes de enviá-lo à Groq; o runtime,
+`moto-vad` e o modelo precisam estar na mesma instalação atualizada.
+
+Como alternativa explícita, para começar assim que abrir o bichinho, marque **Começar a conversa ao abrir**
 em **Configurar**. Ao abrir, ele conecta e diz **“Olá! Estou ouvindo.”**; espere a
 confirmação e faça a pergunta. A partir daí as falas seguem para a Groq e para
 seu Hermes. Essa opção é explícita e vem desmarcada em configurações antigas.

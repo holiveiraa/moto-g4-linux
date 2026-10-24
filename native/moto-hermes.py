@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 
 CONFIG = Path('/root/.config/moto-linux/hermes.json')
 BINARY = '/usr/local/bin/moto-hermes'
+CAPTURE_DIAGNOSTIC = Path('/run/moto-hermes-diagnostics/capture.json')
 DEFAULTS = {'server_url':'https://server.example:18790/', 'user_id':'0', 'profile':'',
             'auth_origin':None, 'ca_file':None, 'auto_speak':True, 'remember_session':False,
             'start_on_open':False}
@@ -106,6 +107,23 @@ def save_voice_diagnostic(value):
         metric = value.get(key)
         safe[key] = metric if type(metric) is int and 0 <= metric <= maximum else None
     save_private_json(safe, CONFIG.with_name('hermes-voice-diagnostic.json'))
+
+
+def save_capture_diagnostic(value):
+    """Overwrite one private counter snapshot, never raw audio or event data."""
+    safe = {}
+    for key in ('frames', 'raw_voice_frames', 'gated_voice_frames', 'max_rms', 'min_voice_rms'):
+        metric = value.get(key)
+        safe[key] = metric if type(metric) is int and 0 <= metric <= 2**53 else None
+    save_private_json(safe, CAPTURE_DIAGNOSTIC)
+
+
+def save_speech_decision(value):
+    safe = {'accepted':value.get('accepted') is True}
+    for key in ('speech_ms', 'max_run_ms', 'milliseconds'):
+        metric = value.get(key)
+        safe[key] = metric if type(metric) is int and 0 <= metric <= 51000 else None
+    save_private_json(safe, CAPTURE_DIAGNOSTIC.with_name('speech.json'))
 
 
 class Worker:

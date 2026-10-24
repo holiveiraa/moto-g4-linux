@@ -27,6 +27,9 @@ use std::{
 
 const MODEL: &str = "/usr/local/share/moto-hermes/ggml-tiny-q5_1.bin";
 const MODEL_SHA: &str = "818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7";
+const VAD_MODEL: &str = "/usr/local/share/moto-hermes/ggml-silero-v6.2.0.bin";
+const VAD_SHA: &str = "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987";
+const VAD: Error = Error("Detecção local de fala indisponível. Atualize moto-vad e o modelo Silero; nenhum áudio foi enviado.");
 const LOCAL: Error = Error("Ativação local indisponível. Confira o modelo e o componente moto-wake; nenhum áudio foi enviado.");
 type Emit = Arc<dyn Fn(Value) + Send + Sync>;
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -258,14 +261,82 @@ fn helper(control: &Shared, desired: Desired) -> Result<Process> {
     }
     Ok(process)
 }
+fn speech_helper(control: &Shared, desired: Desired) -> Result<Process> {
+    // Explicit local review overrides; never supplied by a server or GUI form.
+    let model = std::env::var_os("MOTO_HERMES_VAD_MODEL")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| VAD_MODEL.into());
+    let binary = std::env::var_os("MOTO_HERMES_VAD_BINARY")
+        .unwrap_or_else(|| "/usr/local/bin/moto-vad".into());
+    let metadata = fs::metadata(&model).map_err(|_| VAD)?;
+    if !metadata.is_file() || metadata.len() > 2 * 1024 * 1024 {
+        return Err(VAD);
+    }
+    let check = Command::new("sha256sum")
+        .arg(&model)
+        .stderr(Stdio::null())
+        .output()
+        .map_err(|_| VAD)?;
+    if !check.status.success() || !String::from_utf8_lossy(&check.stdout).starts_with(VAD_SHA) {
+        return Err(VAD);
+    }
+    let mut cmd = Command::new(binary);
+    cmd.arg("--model").arg(model);
+    let mut process = Process::spawn(cmd, None).map_err(|_| VAD)?;
+    if process.line(control, desired, 10).map_err(|_| VAD)?["ready"] != true {
+        return Err(VAD);
+    }
+    Ok(process)
+}
+
+fn verified_speech(
+    vad: &mut Option<Process>,
+    audio: &[i16],
+    control: &Shared,
+    desired: Desired,
+    emit: &Emit,
+) -> Result<bool> {
+    if vad.is_none() {
+        *vad = Some(speech_helper(control, desired)?);
+    }
+    let decision = vad
+        .as_mut()
+        .ok_or(VAD)?
+        .decode(audio, control, desired)
+        .map_err(|_| VAD)?;
+    if !current(control, desired) {
+        return Ok(false);
+    }
+    // The helper emits no words. Forward only its typed, bounded decision.
+    let accepted = decision["accepted"].as_bool().ok_or(VAD)?;
+    let speech_ms = decision["speech_ms"]
+        .as_u64()
+        .filter(|v| *v <= 51000)
+        .ok_or(VAD)?;
+    let max_run_ms = decision["max_run_ms"]
+        .as_u64()
+        .filter(|v| *v <= speech_ms)
+        .ok_or(VAD)?;
+    let milliseconds = decision["milliseconds"]
+        .as_u64()
+        .filter(|v| *v <= 25000)
+        .ok_or(VAD)?;
+    emit(
+        json!({"event":"speech_checked","voice_epoch":desired.epoch,"decision":{
+        "accepted":accepted,"speech_ms":speech_ms,"max_run_ms":max_run_ms,"milliseconds":milliseconds}}),
+    );
+    Ok(accepted)
+}
 fn segment(
     input: &mut Capture,
     control: &Shared,
     desired: Desired,
     alive: &AtomicBool,
     seconds: usize,
+    emit: &Emit,
 ) -> Result<Option<Vec<i16>>> {
     let mut vad = Segmenter::new(seconds);
+    let mut frames = 0u64;
     let mut buf = [0u8; 8192];
     while alive.load(Ordering::SeqCst) && current(control, desired) {
         if input.process.pending.len() < FRAME_SAMPLES * 2 {
@@ -287,7 +358,14 @@ fn segment(
                 .iter()
                 .map(|b| i16::from_le_bytes([b[0], b[1]]))
                 .collect();
-            if let Some(audio) = vad.feed(&samples) {
+            let audio = vad.feed(&samples);
+            frames += 1;
+            if audio.is_some() || frames.is_multiple_of(250) {
+                emit(
+                    json!({"event":"capture_health","voice_epoch":desired.epoch,"metrics":vad.health()}),
+                );
+            }
+            if let Some(audio) = audio {
                 return Ok(Some(audio));
             }
         }
@@ -301,7 +379,7 @@ struct WakeCapture {
     thread: Option<thread::JoinHandle<()>>,
 }
 impl WakeCapture {
-    fn new(device: &str, control: &Shared, desired: Desired) -> Self {
+    fn new(device: &str, control: &Shared, desired: Desired, emit: &Emit) -> Self {
         let alive = Arc::new(AtomicBool::new(true));
         let latest = Arc::new(Mutex::new(None));
         let error = Arc::new(Mutex::new(None));
@@ -309,11 +387,12 @@ impl WakeCapture {
         let l = latest.clone();
         let e = error.clone();
         let c = control.clone();
+        let emit = emit.clone();
         let device = device.to_string();
         let worker = thread::spawn(move || {
             let result = (|| {
                 let mut input = Capture::new(&device)?;
-                while let Some(audio) = segment(&mut input, &c, desired, &a, 5)? {
+                while let Some(audio) = segment(&mut input, &c, desired, &a, 5, &emit)? {
                     // One latest candidate only; replace old audio while inference runs.
                     *l.lock().map_err(|_| LOCAL)? = Some(audio);
                 }
@@ -346,6 +425,7 @@ fn capture_turn(
     control: &Shared,
     desired: Desired,
     wake: &mut Option<Process>,
+    vad: &mut Option<Process>,
     private: &Private,
     emit: &Emit,
 ) -> Result<()> {
@@ -357,7 +437,7 @@ fn capture_turn(
         if !current(control, desired) {
             return Ok(());
         }
-        let capture = WakeCapture::new(device, control, desired);
+        let capture = WakeCapture::new(device, control, desired, emit);
         emit(json!({"event":"voice_listening","voice_epoch":desired.epoch,"mode":"wake"}));
         while current(control, desired) {
             if let Some(error) = capture.error.lock().map_err(|_| LOCAL)?.take() {
@@ -365,6 +445,9 @@ fn capture_turn(
             }
             let audio = capture.latest.lock().map_err(|_| LOCAL)?.take();
             if let Some(audio) = audio {
+                if !verified_speech(vad, &audio, control, desired, emit)? {
+                    continue;
+                }
                 emit(json!({"event":"wake_checking","voice_epoch":desired.epoch}));
                 let result = wake
                     .as_mut()
@@ -399,9 +482,19 @@ fn capture_turn(
     } else {
         let mut input = Capture::new(device)?;
         emit(json!({"event":"voice_listening","voice_epoch":desired.epoch,"mode":"conversation"}));
-        let audio = segment(&mut input, control, desired, &AtomicBool::new(true), 45)?;
+        let audio = segment(
+            &mut input,
+            control,
+            desired,
+            &AtomicBool::new(true),
+            45,
+            emit,
+        )?;
         drop(input);
         if let Some(audio) = audio {
+            if !verified_speech(vad, &audio, control, desired, emit)? {
+                return Ok(());
+            }
             let mut c = control.lock().map_err(|_| LOCAL)?;
             if c.alive && c.awake && c.desired == desired {
                 let path = private.wav(&audio)?;
@@ -436,6 +529,7 @@ pub fn run(device: &str, emit: Emit) -> Result<()> {
     let device = device.to_string();
     let worker = thread::spawn(move || {
         let mut wake = None;
+        let mut vad = None;
         loop {
             let state = match control.lock() {
                 Ok(c) if c.alive => c.desired,
@@ -445,9 +539,11 @@ pub fn run(device: &str, emit: Emit) -> Result<()> {
                 thread::sleep(Duration::from_millis(15));
                 continue;
             }
-            if let Err(error) = capture_turn(&device, &control, state, &mut wake, &private, &output)
-            {
+            if let Err(error) = capture_turn(
+                &device, &control, state, &mut wake, &mut vad, &private, &output,
+            ) {
                 wake = None;
+                vad = None;
                 if let Ok(mut c) = control.lock() {
                     if c.alive && c.desired == state {
                         c.desired.mode = Mode::Paused;

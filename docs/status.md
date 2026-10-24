@@ -1,6 +1,6 @@
 # Hardware and project status
 
-Evidence reviewed: **23 October 2026**. The working prototype has been exercised
+Evidence reviewed: **24 October 2026**. The working prototype has been exercised
 on one **Motorola Moto G4 Plus XT1640, athene P2A, 2 GB RAM / 32 GB storage**,
 with its original **Athene_16MP** hardware description. No other variant is
 certified by this project. Product-family similarity does not establish matching
@@ -420,6 +420,39 @@ later pieces retain the 400-character target, with exact text preservation.
 - The owner had already confirmed the stranded task was complete. After checking
   the matching current conversation, the local unknown state was acknowledged
   explicitly, with no prompt resubmission or server/host administration.
+
+## Unsolicited voice-loop correction — 24 October
+
+The owner reported replies continuing without interaction. The loop was stopped
+by closing the client. A local probe reproduced WebRTC false positives from
+low-level microphone noise (candidate RMS roughly 13-41 signed-16 units); Groq
+returned short text for these clips. An energy-only correction passed a short
+quiet test but failed the extended physical idle review, and was not installed.
+
+Every candidate now passes a second, local Silero v6.2.0 speech verifier before
+wake recognition or Groq. Its pinned model is 885,098 bytes. Missing/corrupt
+assets stop listening with a local error instead of uploading unverified noise.
+Only the latest counter/decision snapshots are kept in private volatile `/run`
+files. The owner-requested opening mode waits for **Olá Hermes**; continuous
+turns begin only after activation, with capture paused throughout playback.
+
+- Host checks: **56 Rust tests**, format/Clippy and **124 offline Python tests**.
+  The matching **56 native Rust**, **23 companion Python** tests and isolated
+  fullscreen/tmux review passed on the reference Moto.
+- A native verifier review rejected silence/noise, accepted known synthetic
+  speech and confirmed state reset between packets, without network or audio I/O.
+- The real-service chain passed with synthetic **Olá Hermes**, an exact known
+  question, one transcription/agent submission and five seconds of rearmed
+  low-level speech-shaped noise without another request.
+- A separate physical speaker/microphone chain recognized its known acoustic
+  question, completed Groq/Hermes/Edge playback, and stayed listening for **60
+  seconds without another transcription or agent submission**. This verifies
+  that bounded setup, not every possible room or the owner's wake accuracy.
+- Six userspace files were installed with verified rollback and independent
+  readback, preserving the current tmux session. The core is 3,558,344 bytes,
+  SHA256 `2ac208ce48c63b01376376d071ae2e17b2d776758893a708d0c016e77ad1e5ee`.
+  Only the owner's explicit app-opening preference was then changed to wait
+  for local activation. No server deployment or Umbrel administration occurred.
 
 ## Distribution maturity
 

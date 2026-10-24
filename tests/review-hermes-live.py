@@ -52,7 +52,14 @@ def fake_capture(folder):
         say('wake.wav')
     elif not app_open and number == 2:
         say('question.wav')
-    while True: silence(1)
+    # Speech-shaped noise below the measured front-end floor must not create
+    # another transcription/agent turn after the reply has rearmed capture.
+    while True:
+        with wave.open(str(folder/'question.wav'), 'rb') as wav:
+            low = array.array('h', wav.readframes(wav.getnframes()))
+        peak = max((abs(v) for v in low), default=1) or 1
+        noise = array.array('h', (int(v*24/peak) for sample in low for v in (sample,)*3))
+        send(noise.tobytes()); silence(1)
 
 
 def fake_playback(folder):
@@ -71,7 +78,10 @@ def main():
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--expected-transcript', help='Known synthetic question text; compare without logging the returned transcript.')
     parser.add_argument('--activation', choices=('wake-word','app-open'), default='wake-word')
+    parser.add_argument('--idle-seconds', type=int, default=5, help='Observe rearmed capture without another request (5-90 seconds).')
     args = parser.parse_args()
+    if not 5 <= args.idle_seconds <= 90:
+        parser.error('idle-seconds must be between 5 and 90')
     if not os.environ.get('DISPLAY'):
         parser.error('Start a private Xvfb display first; never use the owner display.')
     os.umask(0o077)
@@ -108,6 +118,7 @@ def main():
         os.environ['PATH'] = str(tools)+os.pathsep+os.environ['PATH']
         os.environ['MOTO_UX_CONFIG'] = str(folder/'ux.json')
         backend.CONFIG = config/source.name
+        backend.CAPTURE_DIAGNOSTIC = folder/'runtime/capture.json'
         backend.BINARY = str(args.binary.resolve(strict=True))
         commands = []; events = []; failures = []; phases = []; activations = []
         original_worker = backend.Worker
@@ -148,6 +159,7 @@ def main():
             shell.panel.voice_backend.capture_device = lambda: 'hw:0,0'
             shell.panel.voice_backend.CONFIG = config/'groq.json'
             app.home()
+            quiet_until = None
             deadline = time.monotonic()+240
             while time.monotonic() < deadline:
                 shell.root.update(); time.sleep(.005)
@@ -159,7 +171,11 @@ def main():
                 required_listens = 2 if args.activation=='app-open' else 4
                 if (events.count('spoken') >= 2 and events.count('voice_listening') >= required_listens
                         and app.awake and not (app.pending or app.transcribing or app.speech_active)
-                        and app.notice == 'Pode falar'): break
+                        and app.notice == 'Pode falar'):
+                    if quiet_until is None: quiet_until = time.monotonic()+args.idle_seconds
+                    if time.monotonic() >= quiet_until: break
+                if commands.count('transcribe') > 1 or commands.count('send') > 1:
+                    raise RuntimeError('Unsolicited turn during rearmed idle observation')
             else: raise RuntimeError('Chain timed out; event names='+repr(events)+'; commands='+repr(commands))
             if args.activation=='wake-word': assert 'rejected_wake_restored' in phases
             assert activations == ['app_open' if args.activation=='app-open' else 'wake_word']
@@ -178,7 +194,7 @@ def main():
                 'negative_wake_restored':'rejected_wake_restored' in phases,
                 'postwake_transcriptions':1,'agent_turns':1,'audio_bytes':counts,
                 'speech_sample_rate':speech['sample_rate'],'largest_reply_chunk':speech['largest_chunk'],
-                'rearmed':True}),flush=True)
+                'rearmed':True,'idle_without_extra_turn_seconds':args.idle_seconds}),flush=True)
         finally:
             subprocess.run = real_run
             if shell:

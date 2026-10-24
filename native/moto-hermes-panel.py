@@ -184,6 +184,12 @@ class HermesPanel:
         elif event == 'wake_checked':
             try: backend.save_voice_diagnostic(value.get('decision') or {})
             except (OSError, ValueError): pass
+        elif event == 'capture_health':
+            try: backend.save_capture_diagnostic(value.get('metrics') or {})
+            except (OSError, ValueError): pass
+        elif event == 'speech_checked':
+            try: backend.save_speech_decision(value.get('decision') or {})
+            except (OSError, ValueError): pass
         elif event == 'voice_error': self.set_status(value.get('text', 'Microfone indisponível.'), 'error')
 
     def sleep(self):
