@@ -3,6 +3,53 @@
 use serde_json::Value;
 use std::collections::VecDeque;
 
+/// Fixed-rate 48 -> 16 kHz decimation, with an antialias low-pass before
+/// dropping samples. A three-sample box average folds high-frequency capture
+/// noise into the speech band. This 129-tap Blackman-windowed sinc has a 7 kHz
+/// cutoff, unity DC gain and preserves sample count/timing. No AGC or model bias.
+pub fn wake_pcm(audio: &[i16]) -> Vec<i16> {
+    const HALF: isize = 64;
+    static COEFFICIENTS: std::sync::OnceLock<[f64; 129]> = std::sync::OnceLock::new();
+    let coefficients = COEFFICIENTS.get_or_init(|| {
+        let mut values = [0.0; 129];
+        for (i, value) in values.iter_mut().enumerate() {
+            let j = i as f64 - HALF as f64;
+            let x = 2.0 * 7000.0 / 48000.0 * j;
+            let sinc = if i == HALF as usize {
+                1.0
+            } else {
+                (std::f64::consts::PI * x).sin() / (std::f64::consts::PI * x)
+            };
+            let window = 0.42
+                + 0.5 * (std::f64::consts::PI * j / HALF as f64).cos()
+                + 0.08 * (std::f64::consts::TAU * j / HALF as f64).cos();
+            *value = 2.0 * 7000.0 / 48000.0 * sinc * window;
+        }
+        let sum: f64 = values.iter().sum();
+        for value in &mut values {
+            *value /= sum;
+        }
+        values
+    });
+    (0..audio.len() / 3)
+        .map(|n| {
+            let center = (n * 3 + 1) as isize;
+            let value: f64 = coefficients
+                .iter()
+                .enumerate()
+                .filter_map(|(i, c)| {
+                    let position = center + i as isize - HALF;
+                    (position >= 0)
+                        .then(|| audio.get(position as usize))
+                        .flatten()
+                        .map(|s| *s as f64 * c)
+                })
+                .sum();
+            value.round().clamp(i16::MIN as f64, i16::MAX as f64) as i16
+        })
+        .collect()
+}
+
 pub const FRAME_SAMPLES: usize = 960; // 20 ms at native capture 48 kHz.
 
 pub fn normalized(text: &str) -> String {
@@ -46,9 +93,14 @@ pub fn valid_wake(result: &Value) -> bool {
 
 /// One bounded decision, without ambient text or audio. Never forward the
 /// recognizer's object: future helper fields may contain private material.
-pub fn wake_diagnostic(result: &Value) -> Value {
+pub fn wake_diagnostic(result: &Value, audio: &[i16]) -> Value {
+    let energy: f64 = audio.iter().map(|s| (*s as f64).powi(2)).sum();
     let probability = |key: &str| result[key].as_f64().filter(|v| (0.0..=1.0).contains(v));
     serde_json::json!({
+        "capture_ms": audio.len() as u64 * 1000 / 48000,
+        "peak": audio.iter().map(|s| i32::from(*s).unsigned_abs()).max().unwrap_or(0),
+        "rms": (energy / audio.len().max(1) as f64).sqrt().round() as u64,
+        "clipped_samples": audio.iter().filter(|s| i32::from(**s).unsigned_abs() >= 32760).count(),
         "accepted": valid_wake(result),
         "phrase_match": wake_threshold(result).is_some(),
         "probability": probability("probability"),

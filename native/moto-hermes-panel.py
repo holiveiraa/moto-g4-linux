@@ -156,7 +156,9 @@ class HermesPanel:
         elif event == 'voice_listening':
             if self.voice_warning: self.set_status(self.voice_warning, 'error')
             else: self.set_status('Pode falar' if self.awake else 'Diga “Olá Hermes”', 'listening' if self.awake else 'standby')
-        elif event == 'wake_checking': self.set_status('…', 'standby')
+        elif event == 'wake_checking':
+            # Ambient candidates remain standby until activation is accepted.
+            self.set_status('Diga “Olá Hermes”', 'standby')
         elif event == 'wake_checked':
             try: backend.save_voice_diagnostic(value.get('decision') or {})
             except (OSError, ValueError): pass

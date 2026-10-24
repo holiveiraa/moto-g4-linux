@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import wave
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +66,7 @@ def main():
     parser.add_argument('--negative-wav', type=Path, required=True)
     parser.add_argument('--question-wav', type=Path, required=True)
     parser.add_argument('--binary', type=Path, required=True)
+    parser.add_argument('--expected-transcript', help='Known synthetic question text; compare without logging the returned transcript.')
     args = parser.parse_args()
     if not os.environ.get('DISPLAY'):
         parser.error('Start a private Xvfb display first; never use the owner display.')
@@ -111,6 +113,14 @@ def main():
                 super().send(value)
             def deliver(self, value, generation=None):
                 name = value.get('event')
+                if name == 'transcript' and args.expected_transcript is not None:
+                    def normalize(text):
+                        decomposed = unicodedata.normalize('NFD', text.lower())
+                        words = ''.join(c if c.isalnum() else ' ' for c in decomposed if not unicodedata.combining(c))
+                        return ' '.join(words.split())
+                    if normalize(value.get('text', '')) != normalize(args.expected_transcript):
+                        failures.append(('transcript_mismatch', None, 'Known synthetic question was not recognized.'))
+                        return
                 if name not in ('face','listener_ready'): events.append(name)
                 # These workers return fixed, sanitized client error strings;
                 # never retain status/reply/transcript payloads here.
@@ -155,6 +165,7 @@ def main():
             speech = json.loads((config/'hermes-speech-diagnostic.json').read_text())
             assert speech['outcome'] == 'completed' and speech['bytes'] == counts[-1]
             print(json.dumps({'passed':True,'live_services':['Groq','Hermes','Edge'],
+                'transcript_checked':args.expected_transcript is not None,
                 'synthetic_microphone':True,'synthetic_speaker':True,'negative_wake_restored':True,
                 'postwake_transcriptions':1,'agent_turns':1,'audio_bytes':counts,
                 'speech_sample_rate':speech['sample_rate'],'largest_reply_chunk':speech['largest_chunk'],

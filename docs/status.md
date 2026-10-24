@@ -315,8 +315,45 @@ documented limitation. See [speech policy](hermes-setup.md#speech-transport-and-
   the existing identity-check challenge. A verified root session worked over
   the VPN while LAN port 22 refused connections. USB Dropbear was preserved;
   its earlier connectivity problem remains unresolved. No boot/partition,
-  account enrollment or Umbrel host change was made. Reboot persistence of the
-  incoming SSH change has not been physically retested.
+  account enrollment or Umbrel host change was made. A subsequent boot was
+  observed with incoming VPN SSH still available; the reboot cause is unknown.
+
+## Physical wake diagnosis and capture filtering — 23 October
+
+The owner correctly rejected simulated audio as proof of a real conversation.
+Three deliberate, labelled activation attempts were rejected locally, before
+any agent message. **Owner-voice activation remains unaccepted.** Increasing
+model size/context alone did not resolve those samples. No speculative model,
+prompt or threshold change was installed.
+
+The following userspace correction adds antialias filtering before 48-to-16 kHz
+wake conversion and safe capture-duration/RMS/peak/clipping metrics. A spectral
+regression fails with the old box average and passes with the new filter.
+Candidate checks retain the standby caption, so checking does not imply that
+activation succeeded. A temporary calibration window was removed and the normal
+desktop restored. Deliberate calibration must start PCM before its cue and
+automatically close its screen.
+
+- **53 Rust tests**, formatting/Clippy and **119 Python offline regressions**
+  passed; **53 native Rust tests**, **18 companion Python tests** and the
+  isolated Tk/tmux review passed on the reference Moto.
+- The linked Groq/Hermes/Edge chain passed again with synthetic input/output.
+  An additional isolated run used a synthetic wake candidate, then the **real
+  microphone and speaker**: a known synthetic question was played acoustically,
+  transcribed by Groq, answered by the agent, spoken and followed by rearming.
+  Acknowledgment/reply contained 153,216/464,256 PCM bytes at 24 kHz. This proves
+  the post-wake hardware path in that run, not activation with the owner's voice.
+- A test that inserted an additional playback bridge reported a drain timeout;
+  the direct production player passed without that bridge. The failed bridged
+  run is not counted as a production playback failure.
+- Physical speaker-to-microphone loopback reached the local recognizer, but
+  phrase spelling/confidence were unreliable. The filter corrects signal
+  quality; it does not establish that activation accuracy is fixed.
+- Three userspace files were installed with verified input/readback and fresh
+  rollback backup. Owner settings and tmux `@0` were preserved. The core is
+  3,548,680 bytes, SHA256
+  `b7f0fb6389c8eba8ea4fabd63f53694d6092193c159a16c9e3cf69cb7dee793d`.
+  No server-runtime or Umbrel host configuration was accessed or changed.
 
 ## Distribution maturity
 

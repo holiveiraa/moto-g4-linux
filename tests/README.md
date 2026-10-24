@@ -88,6 +88,12 @@ real Groq configuration or Tailscale identity to create a screenshot.
 
 ## Opt-in live Hermes voice chain
 
+Supply `--expected-transcript "your known synthetic question"` to verify
+recognized content as well as event ordering. A mismatch fails before sending
+it to the agent and reports no returned words. Without this option, a pass
+establishes protocol flow, not recognition of the intended sentence. This review
+replaces microphone and speaker; it does not prove physical activation.
+
 `review-hermes-live.py` exercises the actual Tk controller, Rust network worker,
 local VAD/recognizer/model and real Groq → Hermes → Edge services in one chain.
 It replaces only ALSA capture/playback with generated speech and a PCM byte

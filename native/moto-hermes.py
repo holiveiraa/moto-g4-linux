@@ -99,6 +99,9 @@ def save_voice_diagnostic(value):
     safe = {key:value.get(key) is True for key in ('accepted', 'phrase_match')}
     safe.update({key:probability(key) for key in ('probability', 'no_speech')})
     safe['milliseconds'] = duration if type(duration) is int and 0 <= duration <= 25000 else None
+    for key, maximum in (('capture_ms', 5000), ('peak', 32768), ('rms', 32768), ('clipped_samples', 240000)):
+        metric = value.get(key)
+        safe[key] = metric if type(metric) is int and 0 <= metric <= maximum else None
     save_private_json(safe, CONFIG.with_name('hermes-voice-diagnostic.json'))
 
 

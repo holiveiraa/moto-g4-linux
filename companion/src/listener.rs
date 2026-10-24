@@ -123,12 +123,7 @@ impl Process {
         Err(LOCAL)
     }
     fn decode(&mut self, audio: &[i16], control: &Shared, desired: Desired) -> Result<Value> {
-        let down: Vec<i16> = audio
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .map(|s| ((s[0] as i32 + s[1] as i32 + s[2] as i32) / 3) as i16)
-            .collect();
+        let down = hearing::wake_pcm(audio);
         let mut packet = (down.len() as u32).to_le_bytes().to_vec();
         for s in down {
             packet.extend(s.to_le_bytes());
@@ -379,7 +374,7 @@ fn capture_turn(
                     return Ok(());
                 }
                 emit(json!({"event":"wake_checked","voice_epoch":desired.epoch,
-                    "decision":hearing::wake_diagnostic(&result)}));
+                    "decision":hearing::wake_diagnostic(&result, &audio)}));
                 if hearing::valid_wake(&result) {
                     {
                         let mut c = control.lock().map_err(|_| LOCAL)?;

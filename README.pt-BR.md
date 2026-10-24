@@ -46,10 +46,12 @@ em Linux a partir do fonte atual. Não representam uma conversa real já validad
 - **Umbrel sem HTTPS**: use HTTP pelo IP Tailscale e pela porta existente do
   app. O cliente verifica a VPN e restringe HTTP/WS a ela, sem mudar o servidor.
 
-**Estado experimental:** instalado no Moto de referência. O fluxo completo
-Groq → Hermes → Edge passou no aparelho com serviços reais e entrada/saída de
-áudio sintéticas. Ativação com sua voz, ruído, conversa física e calor/autonomia
-ainda precisam de aceitação. [Resultados e limites](docs/status.md#hermes-voice-recovery-and-live-service-chain--installed).
+**Estado experimental:** instalado no Moto de referência. Groq → Hermes → Edge
+passou com serviços reais; uma pergunta sintética reproduzida acusticamente
+também passou pelo microfone e alto-falante físicos, após ativação simulada.
+**A ativação com a voz do dono falhou nas três tentativas de aceitação e segue
+em investigação.** Conversa completa com o dono e calor/autonomia ainda precisam
+de aceitação. [Resultados e limites](docs/status.md#physical-wake-diagnosis-and-capture-filtering--23-october).
 
 ## Configure os dois lados
 

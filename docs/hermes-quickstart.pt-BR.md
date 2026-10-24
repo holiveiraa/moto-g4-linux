@@ -152,6 +152,7 @@ isso só apaga a luz de fundo, não suspende nem bloqueia o sistema.
 
 | Sintoma | Próximo passo |
 | --- | --- |
+| A sessão existe, mas fica vazia ao dizer “Olá Hermes” | Espere a confirmação falada. A sessão é criada/retomada ao conectar; isso ainda não prova que a ativação aceitou sua voz. Consulte o diagnóstico local. |
 | Falta componente/modelo | Siga o build/instalação completo; o app não envia áudio de espera à nuvem como alternativa. |
 | Erro de certificado | Confira hostname, data/hora, CA e origens do app/login. Preserve a verificação TLS. |
 | Login funciona no navegador, mas o app recusa | Confira conta, URL e contrato da versão Umbrel. Não exporte cookies nem abra porta interna. |

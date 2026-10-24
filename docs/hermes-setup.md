@@ -385,18 +385,28 @@ synthetic reproduction instead.
 
 ### Local activation stays at three dots
 
-The dots mean the local model is checking a speech candidate. A rejected
-candidate must return to **Diga “Olá Hermes”** while listening continues; it must
-not upload that clip or create a chat message. Older clients left the dots on
-screen after rejection. Update the matching Rust runtime and native host modules.
+Current clients keep **Diga “Olá Hermes”** while checking speech candidates.
+Only the spoken **Olá! Estou ouvindo.** confirms activation. Older clients
+displayed dots during checks, and one version left them there after rejection.
+Update the matching Rust runtime and native host modules. Connecting already
+creates/resumes a conversation; an empty chat before accepted activation does
+not establish a server fault.
 
 The private `hermes-voice-diagnostic.json`, next to `hermes.json`, retains only
 the latest decision: accepted/phrase-match booleans, probability/no-speech scores
-and inference milliseconds. It contains no recognized words, audio, address or
-session identity. A phrase match with low confidence differs from a phrase
-mismatch; neither justifies automatically sending standby audio to Groq or
-loosening the activation threshold. Real microphone/voice acceptance is still
-required after the synthetic chain review in [Testing](../tests/README.md).
+and inference milliseconds; raw capture duration (`capture_ms`), integer
+RMS/peak in signed-16 sample units and `clipped_samples` (absolute value >=32760).
+These measure raw 48 kHz capture before resampling. Capture duration is distinct
+from inference time. No recognized words, audio, address or session identity are
+retained. A phrase match with low confidence differs from a phrase mismatch;
+neither justifies uploading standby audio to Groq or blindly loosening thresholds.
+
+Wake conversion uses a 129-tap Blackman-windowed low-pass at 7 kHz before
+48-to-16 kHz decimation, preserving timing and sample count. This prevents
+high-frequency noise folding into speech; it does not establish wake accuracy.
+The [Whisper loader also resamples before inference](https://github.com/openai/whisper/blob/main/whisper/audio.py).
+Real microphone/voice acceptance remains required after the synthetic chain
+review in [Testing](../tests/README.md).
 
 ### Speech transport and safe diagnostics
 

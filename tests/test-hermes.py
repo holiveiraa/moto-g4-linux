@@ -183,16 +183,17 @@ class CompanionFiles(unittest.TestCase):
         app = self.app()
         with tempfile.TemporaryDirectory() as folder, patch.object(self.h.backend, 'CONFIG', Path(folder)/'hermes.json'):
             app.voice_event({'event':'wake_checking','voice_epoch':0})
-            self.assertEqual(app.notice, '…')
+            self.assertEqual(app.notice, 'Diga “Olá Hermes”')
             app.voice_event({'event':'wake_checked','voice_epoch':0,'decision':{
                 'accepted':False,'phrase_match':True,'probability':.3,'no_speech':.01,
-                'milliseconds':1800,'text':'private ambient words','audio':'private audio'}})
+                'milliseconds':1800,'capture_ms':1200,'peak':3000,'rms':200,'clipped_samples':0,'text':'private ambient words','audio':'private audio'}})
             app.voice_event({'event':'voice_listening','voice_epoch':0,'mode':'wake'})
             self.assertEqual(app.notice, 'Diga “Olá Hermes”')
             app.worker.send.assert_not_called()
             path = Path(folder)/'hermes-voice-diagnostic.json'
             self.assertEqual(json.loads(path.read_text()), {'accepted':False,'phrase_match':True,
-                'probability':.3,'no_speech':.01,'milliseconds':1800})
+                'probability':.3,'no_speech':.01,'milliseconds':1800,
+                'capture_ms':1200,'peak':3000,'rms':200,'clipped_samples':0})
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             app.voice_event({'event':'wake_checked','voice_epoch':1,'decision':{'accepted':True}})
             self.assertFalse(json.loads(path.read_text())['accepted'])
