@@ -98,6 +98,10 @@ recognized content as well as event ordering. A mismatch fails before sending
 it to the agent and reports no returned words. Without this option, a pass
 establishes protocol flow, not recognition of the intended sentence. This review
 replaces microphone and speaker; it does not prove physical activation.
+For an acoustic check of meaning rather than verbatim dictation, use repeated
+`--expected-word` options instead, such as `--expected-word sorveteria
+--expected-word lavras`. Each must occur as a complete normalized word. The
+result reports `transcript_check: required_words`; this is not an exact match.
 
 Add **`--physical-audio --activation wake-word --idle-seconds 60`** for the
 explicit acoustic review. Close the production voice app first. In its private
@@ -142,16 +146,23 @@ and a harmless question. Do not use personal recordings in a published fixture.
 xvfb-run -a -s '-screen 0 1080x1920x24 -nolisten tcp' \
   python3 tests/review-hermes-live.py \
   --live-config /root/.config/moto-linux/hermes.json \
+  --session-journal /private/test-config/hermes-task.json \
+  --turns 2 --drop-first-reply \
   --binary /usr/local/bin/moto-hermes \
   --negative-wav /private/synthetic/negative.wav \
   --wake-wav /private/synthetic/wake.wav \
   --question-wav /private/synthetic/question.wav
 ```
 
-This is deliberately excluded from offline CI. It uses the existing remembered
-Umbrel cookie and Groq key locally in a temporary private directory, creates a
-separate server conversation and leaves the production journal unchanged. That
-test conversation remains on Hermes for inspection. Credentials, synthetic
+This is deliberately excluded from offline CI. It copies the remembered
+Umbrel cookie, Groq key and supplied idle test journal to a temporary private
+directory. The source journal stays unchanged, and the stored conversation ID
+must match afterward. Prompts do add turns to that existing server conversation;
+choose a disposable test context. There is no implicit conversation creation:
+`--session-journal` or explicit `--create-test-conversation` is required.
+A mismatched journal/account/profile fails closed before creation. `--turns 2`
+checks continued conversation; `--drop-first-reply` loses one local delivery and
+requires recovery without another agent submission. Credentials, synthetic
 recordings and PCM are not included in its result; temporary local copies are
 removed after the workers stop. The source files are checked unchanged. If the
 cookie needs a fresh login, log in through the normal phone UI first. Do not put

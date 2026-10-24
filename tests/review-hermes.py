@@ -53,7 +53,7 @@ def main():
                 if command in ('connect','login'):
                     self.deliver({'event':'connected','text':'Olá! Como posso ajudar?','pending':False})
                 elif command == 'send':
-                    self.deliver({'event':'reply','text':'Resposta simulada: '+value['text']})
+                    self.deliver({'event':'reply','client_turn':value.get('client_turn'),'text':'Resposta simulada: '+value['text']})
                 elif command == 'speak':
                     self.deliver({'event':'spoken'})
                 elif command == 'transcribe':
@@ -61,7 +61,7 @@ def main():
                     else: self.deliver({'event':'transcript','epoch':value['epoch'],'text':'Pergunta por voz'})
                 elif command == 'new_session':
                     self.deliver({'event':'new_session'})
-                elif command in ('stop_speech','cancel'):
+                elif command in ('stop_speech','cancel','ack_reply','poll_reply'):
                     return
                 else: super().send(value)
         backend.Worker=FixtureWorker

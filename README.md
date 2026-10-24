@@ -49,7 +49,8 @@ interface previews, not evidence of a live agent conversation. See
   activation; silence is filtered locally. No push-to-talk between questions.
 - **Your agent and tools:** the chosen Hermes profile, with a separate Moto
   conversation retained across opens. **Nova conversa** starts a fresh one
-  without resetting Telegram or deleting earlier chats.
+  without resetting Telegram or deleting earlier chats. Turns reuse one chat
+  connection; reconnecting resumes the stored conversation.
 - **Your existing Umbrel protection:** password-only accounts work; a code is
   requested only if the account requires 2FA. Wi-Fi or Tailscale supplies the route.
 - **HTTP-only Umbrel supported through Tailscale:** use the server's numeric
@@ -60,7 +61,7 @@ interface previews, not evidence of a live agent conversation. See
 
 **Experimental:** Groq handles activation and conversation; the phone does not
 run a local speech recognizer. Native fixtures and real-service checks are
-recorded with their limits in [status](docs/status.md#groq-activation--24-october).
+recorded with their limits in [status](docs/status.md#conversation-reuse-and-completed-reply-recovery--24-october).
 Owner-voice acceptance and controlled heat/battery measurements remain required.
 
 ## Connect your Hermes: two sides, one setup

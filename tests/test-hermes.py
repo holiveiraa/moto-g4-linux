@@ -235,6 +235,7 @@ class CompanionFiles(unittest.TestCase):
         with patch.dict(sys.modules, {'tkinter': SimpleNamespace()}):
             h = module('moto-hermes-panel')
         self.h = h
+        h.backend.save_delivery_diagnostic = Mock()
         root = Mock()
         root.after.side_effect = lambda delay, callback: self.callbacks.append(callback) or len(self.callbacks)
         self.callbacks = []
@@ -245,6 +246,34 @@ class CompanionFiles(unittest.TestCase):
         app.listener = Mock()
         app.worker = Mock()
         return app
+
+    def test_recovered_reply_is_acknowledged_and_spoken_once_without_resending(self):
+        from unittest.mock import Mock
+        app = self.app()
+        app.say = Mock()
+        app.send_text('fixture question')
+        tag = app.pending_turn
+        reply = {'event':'reply','client_turn':tag,'text':'fixture answer'}
+        with patch.object(self.h.backend, 'settings', return_value={'auto_speak':True}):
+            app.event(reply)
+            app.event(reply)
+            app.event(dict(reply,client_turn='older-turn'))
+        app.say.assert_called_once_with('fixture answer')
+        self.assertFalse(app.pending)
+        self.assertIsNone(app.pending_turn)
+        calls = [call.args[0] for call in app.worker.send.call_args_list]
+        self.assertEqual(sum(v['cmd']=='send' for v in calls),1)
+        self.assertIn({'cmd':'ack_reply','client_turn':tag},calls)
+
+    def test_delivery_diagnostics_exclude_text_and_identity(self):
+        h = module('moto-hermes')
+        with tempfile.TemporaryDirectory() as folder, patch.object(h,'CAPTURE_DIAGNOSTIC',Path(folder)/'capture.json'):
+            h.save_delivery_diagnostic([{'stage':'reply_received','pending':True,'speaking':False,
+                'connected':True,'reply_characters':600,'milliseconds':42,
+                'text':'private response','session_id':'private-session','token':'private-token'}]*20)
+            data = (Path(folder)/'delivery.json').read_text()
+            self.assertEqual(len(json.loads(data)['events']),16)
+            self.assertNotIn('private',data)
 
     def test_groq_checks_wake_before_any_agent_submission_and_replies_rearm(self):
         app = self.app()

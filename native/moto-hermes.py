@@ -102,6 +102,21 @@ def save_voice_diagnostic(value):
     save_private_json(safe, CONFIG.with_name('hermes-voice-diagnostic.json'))
 
 
+def save_delivery_diagnostic(events):
+    """Bounded stages/counts only; no reply, prompt, endpoint or session ID."""
+    safe = []
+    for value in events[-16:]:
+        if value.get('stage') not in ('sent','reply_received','reply_applied','spoken','speech_error','connection_lost','error'):
+            continue
+        row = {'stage':value['stage']}
+        for key in ('pending','speaking','connected'): row[key] = value.get(key) is True
+        for key in ('milliseconds','reply_characters'):
+            number = value.get(key)
+            row[key] = number if type(number) is int and 0 <= number < 2**53 else None
+        safe.append(row)
+    save_private_json({'events':safe}, CAPTURE_DIAGNOSTIC.with_name('delivery.json'))
+
+
 def save_capture_diagnostic(value):
     """Overwrite one private counter snapshot, never raw audio or event data."""
     safe = {}

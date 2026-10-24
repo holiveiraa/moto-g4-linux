@@ -32,6 +32,7 @@ struct Fixture {
     edge: Arc<AtomicBool>,
     audio_case: Arc<AtomicUsize>,
     creates: Arc<AtomicUsize>,
+    chat_connections: Arc<AtomicUsize>,
     fail_create: Arc<AtomicBool>,
     queued: Arc<AtomicUsize>,
     root: PathBuf,
@@ -50,6 +51,7 @@ impl Fixture {
         let edge = Arc::new(AtomicBool::new(true));
         let audio_case = Arc::new(AtomicUsize::new(0));
         let creates = Arc::new(AtomicUsize::new(0));
+        let chat_connections = Arc::new(AtomicUsize::new(0));
         let fail_create = Arc::new(AtomicBool::new(false));
         let queued = Arc::new(AtomicUsize::new(0));
         let root =
@@ -59,6 +61,7 @@ impl Fixture {
         let provider = edge.clone();
         let audio = audio_case.clone();
         let sessions = creates.clone();
+        let connections = chat_connections.clone();
         let failing = fail_create.clone();
         let waiting = queued.clone();
         let task = thread::spawn(move || {
@@ -71,6 +74,7 @@ impl Fixture {
                         let provider = provider.clone();
                         let audio = audio.clone();
                         let sessions = sessions.clone();
+                        let connections = connections.clone();
                         let failing = failing.clone();
                         let waiting = waiting.clone();
                         children.push(thread::spawn(move || {
@@ -86,6 +90,7 @@ impl Fixture {
                                 failing,
                                 waiting,
                                 audio,
+                                connections,
                             )
                         }));
                     }
@@ -106,6 +111,7 @@ impl Fixture {
             edge,
             audio_case,
             creates,
+            chat_connections,
             fail_create,
             queued,
             root,
@@ -242,6 +248,7 @@ fn serve(
     fail_create: Arc<AtomicBool>,
     queued: Arc<AtomicUsize>,
     audio_case: Arc<AtomicUsize>,
+    chat_connections: Arc<AtomicUsize>,
 ) {
     stream
         .set_read_timeout(Some(Duration::from_secs(3)))
@@ -363,8 +370,10 @@ fn serve(
             let _ = ws.read();
             return;
         }
+        chat_connections.fetch_add(1, Ordering::SeqCst);
+        let mut replayed: Vec<Value> = Vec::new();
         let mut active = String::from("runtime-moto");
-        let legacy = matches!(queued.load(Ordering::SeqCst), 7 | 8);
+        let legacy = matches!(queued.load(Ordering::SeqCst), 7..=9);
         let _ = ws.send(Message::Text(json!({"method":"event","params":{"type":"gateway.ready","payload":if legacy {json!({})} else {json!({"session_authority":true})}}}).to_string().into()));
         while let Ok(Message::Text(data)) = ws.read() {
             let value: Value = serde_json::from_str(&data).unwrap();
@@ -378,6 +387,7 @@ fn serve(
                         "close_on_disconnect",
                         "profile",
                     ],
+                    "session.events.since" => &["session_id", "last_seen", "profile"],
                     "session.resume" => &[
                         "session_id",
                         "inline_images",
@@ -462,6 +472,11 @@ fn serve(
                         json!({"status":"terminal","outcome":"cancelled","execution_generation":null,"admission_id":"fixture-admission"})
                     }
                 }
+                "session.events.since" => {
+                    let last = value["params"]["last_seen"].as_u64().unwrap_or(0);
+                    json!({"events":replayed.iter().filter(|p|p["seq"].as_u64().unwrap()>last).collect::<Vec<_>>(),"latest_seq":replayed.last().map(|p|p["seq"].as_u64().unwrap()).unwrap_or(0),"epoch":"fixture-epoch","truncated":false})
+                }
+                "gateway.ping" => json!({"ok":true}),
                 "session.interrupt" => json!({"status":"interrupted"}),
                 other => panic!("unexpected fixture method {other}"),
             };
@@ -479,6 +494,13 @@ fn serve(
                 return;
             }
             if value["method"] == "prompt.submit" {
+                if queued.load(Ordering::SeqCst) == 9 {
+                    replayed = vec![
+                        json!({"session_id":active,"seq":1,"type":"message.start"}),
+                        json!({"session_id":active,"seq":2,"type":"message.complete","payload":{"text":"Recovered final reply from the same execution."}}),
+                    ];
+                    continue; // The live final notification was lost, not the server execution.
+                }
                 if matches!(queued.load(Ordering::SeqCst), 3 | 5) {
                     continue;
                 }
@@ -1086,4 +1108,60 @@ fn uncertain_turn_cannot_be_abandoned_by_starting_another_session() {
     assert_eq!(app.event("error")["pending"], true);
     assert_eq!(fixture.creates.load(Ordering::SeqCst), 1);
     assert_eq!(fixture.submits.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_conversation_reuses_one_chat_socket_across_turns_and_reconnects_without_creating() {
+    let fixture = Fixture::new(false, false);
+    {
+        let mut app = fixture.app();
+        app.login();
+        for _ in 0..2 {
+            app.send(json!({"cmd":"send","text":"one harmless fixture question"}));
+            app.event("reply");
+        }
+        assert_eq!(fixture.chat_connections.load(Ordering::SeqCst), 1);
+        assert_eq!(fixture.creates.load(Ordering::SeqCst), 1);
+    }
+    let mut app = fixture.app();
+    app.login();
+    assert_eq!(fixture.creates.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.chat_connections.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn completed_reply_is_retained_until_ui_acknowledges_without_resending_the_prompt() {
+    let fixture = Fixture::new(false, false);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"fixture question","client_turn":"turn-1"}));
+    let first = app.event("reply");
+    app.send(json!({"cmd":"poll_reply","client_turn":"turn-1"}));
+    let recovered = app.event("reply");
+    assert_eq!(first, recovered);
+    assert_eq!(recovered["client_turn"], "turn-1");
+    app.send(json!({"cmd":"ack_reply","client_turn":"other-turn"}));
+    app.send(json!({"cmd":"poll_reply","client_turn":"turn-1"}));
+    assert_eq!(app.event("reply"), first);
+    app.send(json!({"cmd":"ack_reply","client_turn":"turn-1"}));
+    app.send(json!({"cmd":"poll_reply","client_turn":"turn-1"}));
+    assert_eq!(app.event("turn_state")["reply_available"], false);
+    assert_eq!(fixture.submits.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.creates.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn legacy_lost_terminal_notification_is_replayed_without_another_session_or_submission() {
+    let fixture = Fixture::new(false, false);
+    fixture.queued.store(9, Ordering::SeqCst);
+    let mut app = fixture.app();
+    app.login();
+    app.send(json!({"cmd":"send","text":"one tool-using fixture question"}));
+    assert_eq!(
+        app.event_with_timeout("reply", Duration::from_secs(5))["text"],
+        "Recovered final reply from the same execution."
+    );
+    assert_eq!(fixture.submits.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.creates.load(Ordering::SeqCst), 1);
+    assert_eq!(fixture.chat_connections.load(Ordering::SeqCst), 1);
 }

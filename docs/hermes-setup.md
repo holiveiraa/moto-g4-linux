@@ -386,6 +386,31 @@ are restored silently after reconnect. Approvals and uncertain tasks use the
 existing Hermes UI/secondary recovery menu in this preview. Closing local UI
 cannot guarantee cancellation of already accepted tools on the server.
 
+## Session lifetime and reply delivery
+
+One open app keeps one authenticated chat WebSocket. Questions and explicit
+**Nova conversa** use that connection; normal turns do not open another chat
+socket. The stored conversation is resumed on reopening. A failed resume does
+not silently fall back to creating a conversation. The first setup creates one
+conversation; subsequent creation requires the explicit new-conversation action.
+Closing releases the socket and local workers, preserving the journal.
+
+For the legacy contract, each turn records an event watermark before submission.
+While awaiting completion, a two-second read-only event replay backstop recovers
+missing notifications from that execution. It checks the runtime ID, sequence
+and replay epoch; truncation/epoch change requires reconciliation. It never
+resubmits a prompt, creates a session or selects a historical answer by position.
+
+The Rust worker also retains the completed reply in memory until the UI
+acknowledges its local turn tag. A pending UI checks that cache after one second,
+then every two seconds. Duplicate/stale deliveries cannot trigger repeated
+speech. This cache is not persisted and never repeats an agent operation.
+
+Private, volatile `/run/moto-hermes-diagnostics/delivery.json` keeps the last 16
+delivery stages, monotonic timings, state flags and character counts. It contains
+no words, server address, token or conversation ID. The separate speech diagnostic
+records PCM completion; a delivered reply is not itself proof of audible output.
+
 ## Disconnects and troubleshooting
 
 `hermes-task.json` keeps the server binding, owned conversation ID and an

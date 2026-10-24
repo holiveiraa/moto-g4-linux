@@ -7,7 +7,7 @@ certified by this project. Product-family similarity does not establish matching
 panel, touch, amplifier, memory layout or partition geometry.
 
 Current Hermes activation uses **Groq for wake phrases and requests**; the
-phone runs only speech detection. See [the latest correction](#groq-activation--24-october).
+phone runs only speech detection. See [the latest delivery/session correction](#conversation-reuse-and-completed-reply-recovery--24-october).
 Earlier local-ASR sections below are dated history, not installation guidance.
 
 ## Working prototype
@@ -535,6 +535,57 @@ the obsolete local recognizer and tiny/base ASR weights were removed after
 verified backup. Configuration, conversation journal and tmux survived the GUI
 restart. The app reopened connected in wake standby. Silero's small detector
 model remains. No Hermes server change was needed; no Umbrel host was accessed.
+
+## Conversation reuse and completed-reply recovery — 24 October
+
+The owner reported a completed server answer with a phone still showing thinking,
+plus unwanted empty conversations. Earlier short real-service passes did not
+cover those delivery losses. Repeated real-service reviews also created separate
+test conversations; that behavior is now an explicit opt-in.
+
+The client keeps one authenticated chat WebSocket for the open app instead of
+opening one for each operation. Reopening resumes the stored conversation;
+failure does not create a replacement. Legacy turns baseline the event sequence
+before submission and read missing events every two seconds while pending,
+checking runtime, epoch and sequence. This recovers a missing final notification
+without submitting another prompt. A completed reply also remains in the Rust
+worker's memory until the UI acknowledges its local turn tag. Duplicate/stale
+deliveries cannot speak twice. Uncertain executions still require reconciliation.
+
+- **58 Rust tests** and formatting/Clippy passed on the build host. The same
+  Rust tests, **28 Hermes Python regressions** and isolated fullscreen/tmux
+  review passed natively. The complete offline Python suite has **129 tests**.
+- Fixtures deliberately lose a server terminal event and a local UI delivery;
+  recovery preserves one submission. Two ordinary turns use one socket and one
+  conversation; restart resumes it without another creation.
+- The real **Groq → Hermes → Edge** acoustic chain passed with synthetic speech
+  played through the physical speaker and received by the physical microphone:
+  rejected non-wake phrase, accepted wake phrase, **two consecutive questions
+  about sorveterias in Lavras**, two spoken replies and rearmed listening for
+  **60 seconds without an extra request**. It reused the existing conversation;
+  the stored ID and server conversation count stayed unchanged.
+- That acoustic check required the complete normalized words `sorveteria` and
+  `lavras`, not a verbatim transcript. An earlier strict full-sentence acoustic
+  comparison failed before submitting its question; it is not reported as a pass.
+- The first local reply delivery was deliberately discarded: cache recovery
+  requested synthesis **929 ms** after the reply became available. The normal
+  second delivery requested synthesis in **10 ms**. These measure client delivery
+  to the synthesis request, not provider latency or first audible sound. Both
+  actual PCM playbacks completed.
+- Live reviews now require an existing idle test journal, or explicit permission
+  to create one conversation. Reuse fails closed on a mismatched binding. The
+  original journal stays unchanged; test prompts do add turns on the server.
+
+The installed core is 3,557,440 bytes, SHA256
+`b013a799ab321d2389ab93fa3bf82d3c41a0f717dd8a13c13ab03311b1753353`.
+The core/native modules were installed with verified backup, guarded rollback
+and independent hash/size/mode readback. Configuration, stored conversation and
+tmux were preserved, and the app reopened connected in wake standby. Existing
+server conversations were not deleted. No Umbrel host/runtime changes occurred.
+
+The owner's natural voice in the intended room, long ambient-noise use and
+controlled heat/battery remain acceptance limits; this controlled acoustic test
+does not establish every room, connection or utterance.
 
 ## Distribution maturity
 

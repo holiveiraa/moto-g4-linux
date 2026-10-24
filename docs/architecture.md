@@ -45,8 +45,9 @@ The app is a client of the existing Hermes, not another agent model on the
 phone. Its local capture process detects speech without interpreting words.
 The network worker sends voiced wake and request clips to Groq; silence stays
 local. Accepted wake text activates without contacting the agent. Requests go through the protected
-Hermes chat API and replies through its Edge speech relay. The phone owns its
-conversation ID in the configured profile. Closing retains it; **Nova conversa**
+Hermes chat API and replies through its Edge speech relay. The phone keeps one
+chat WebSocket while the app is open and owns its conversation ID in the
+configured profile. Closing retains it; **Nova conversa**
 replaces it after server confirmation. Telegram sessions are not merged.
 
 HTTPS uses normal system/private-CA validation. For HTTP-only Umbrel entries,

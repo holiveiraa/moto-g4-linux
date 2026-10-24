@@ -20,7 +20,7 @@ use tungstenite::{
     client::IntoClientRequest, stream::MaybeTlsStream, Connector, Message, WebSocket,
 };
 pub type Socket = WebSocket<MaybeTlsStream<TcpStream>>;
-const NETWORK: Error =
+pub const NETWORK: Error =
     Error("Sem conexão autenticada com o Hermes. Confira a URL, o certificado e a sessão.");
 pub const LOGIN: Error = Error("Entre com sua conta Umbrel neste aparelho.");
 pub const TOTP: Error = Error("Digite o código de 2FA da sua conta Umbrel.");

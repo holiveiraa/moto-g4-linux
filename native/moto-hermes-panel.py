@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import tkinter as tk
+import time
 
 
 def sibling(name):
@@ -26,6 +27,10 @@ class HermesPanel:
         self.voice_warning = ''
         self.open_activation_pending = False
         self.transcription_mode = None
+        self.turn_serial = 0
+        self.pending_turn = None
+        self.reply_poll_at = 0
+        self.delivery_events = []
         self.screen_suspended = False
         self.pending = self.connected = self.transcribing = self.speech_active = False
         self.forgetting = self.switching = self.awake = self.face_pending = False
@@ -230,13 +235,20 @@ class HermesPanel:
             if self.awake and self.fullscreen(): self.say('Nova conversa. Pode falar.')
             else: self.listen()
         elif event == 'reply':
+            if (self.pending_turn is not None and value.get('client_turn') != self.pending_turn) or (self.pending_turn is None and value.get('client_turn') is not None):
+                return
+            self.delivery('reply_received')
             self.pending = False
+            self.pending_turn = None
             self.last_reply = value.get('text', '')
             if self.fullscreen() and self.last_reply and not value.get('cancelled') and backend.settings()['auto_speak']:
                 self.say(self.last_reply)
             else:
                 self.set_status('Resposta recebida.', 'ready')
                 self.resume_after_voice()
+            if value.get('client_turn') is not None:
+                self.command({'cmd':'ack_reply', 'client_turn':value['client_turn']})
+            self.delivery('reply_applied')
         elif event == 'wake_transcript':
             if not (self.transcribing and self.transcription_mode == 'wake' and self.fullscreen() and value.get('epoch') == self.epoch):
                 return
@@ -268,6 +280,12 @@ class HermesPanel:
             self.voice_warning = value.get('text', 'Falha na voz. Veja a conversa em ···') if event == 'speech_error' else ''
             self.set_status(value.get('text', 'Pode falar'), 'ready' if event == 'spoken' else 'error')
             self.resume_after_voice()
+            self.delivery(event)
+        elif event == 'connection_lost':
+            self.connected = False
+            self.pause_listening()
+            self.set_status(value.get('text', 'Conexão encerrada. Reconecte em ···.'), 'error')
+            self.delivery('connection_lost')
         elif event == 'status': self.set_status(value.get('text', ''), value.get('state', 'thinking'))
         elif event == 'acknowledged':
             self.pending = False
@@ -276,6 +294,7 @@ class HermesPanel:
             if value.get('operation') == 'transcribe' and value.get('epoch') != self.epoch:
                 return
             self.pending = bool(value.get('pending', self.pending))
+            if not self.pending: self.pending_turn = None
             self.transcribing = self.switching = False
             text = value.get('text', 'Não foi possível concluir.')
             diagnostic = value.get('rpc') or {}
@@ -291,6 +310,7 @@ class HermesPanel:
                 self.login_password = ''
                 self.p.note.configure(text=self.notice)
             elif not self.pending and not self.speech_active: self.resume_after_voice()
+            self.delivery('error')
         elif event == 'exited':
             self.speech_active = False
             if self.worker:
@@ -310,9 +330,22 @@ class HermesPanel:
             return
         self.pause_listening()
         self.last_user = text
-        if self.command({'cmd':'send', 'text':text}):
+        self.turn_serial += 1
+        self.pending_turn = f'{self.epoch}:{self.turn_serial}'
+        self.reply_poll_at = time.monotonic()+1
+        if self.command({'cmd':'send', 'text':text, 'client_turn':self.pending_turn}):
             self.pending = True
             self.set_status('Hermes está pensando…', 'thinking')
+            self.delivery('sent')
+        else: self.pending_turn = None
+
+    def delivery(self, stage):
+        self.delivery_events = (self.delivery_events+[{'stage':stage,
+            'milliseconds':round(time.monotonic()*1000), 'pending':self.pending,
+            'speaking':self.speech_active, 'connected':self.connected,
+            'reply_characters':len(self.last_reply)}])[-16:]
+        try: backend.save_delivery_diagnostic(self.delivery_events)
+        except (OSError, ValueError): pass
 
     def stop_local(self):
         self.epoch += 1
@@ -380,6 +413,9 @@ class HermesPanel:
     def tick(self):
         self.timer = None
         if not self.active() or self.p.s.sleeping: return
+        if self.pending and self.pending_turn is not None and time.monotonic() >= self.reply_poll_at:
+            self.reply_poll_at = time.monotonic()+2
+            self.command({'cmd':'poll_reply', 'client_turn':self.pending_turn})
         if self.fullscreen() and self.face_worker and not self.face_pending:
             try:
                 self.face_worker.send({'cmd':'face', 'state':self.state, 'tick':self.frame})

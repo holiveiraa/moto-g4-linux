@@ -32,6 +32,11 @@ admission/generation receipts; legacy uses `idempotency_key`, `streaming` receip
 and its dedicated runtime ID. It never retries a rejected mutation with another
 contract. Strict fixtures exercise both. See [server contracts](../docs/hermes-server-agent.md#contracts-the-moto-expects).
 
+An open app reuses one chat socket across turns. Legacy event replay recovers
+missing terminal notifications by a pre-submit sequence watermark; local replies
+remain cached until the UI acknowledges their turn tag. Neither recovery submits
+another prompt or creates a session. Uncertain outcomes still block new work.
+
 Build on a Linux filesystem with the versions in
 [toolchains.json](toolchains.json), then run:
 

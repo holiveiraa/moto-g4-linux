@@ -55,6 +55,9 @@ impl Model {
             (String::new(), String::new(), Turn::default())
         };
         turn.disconnected();
+        if std::env::var_os("MOTO_HERMES_REQUIRE_EXISTING_SESSION").is_some() && stored.is_empty() {
+            return Err(Error("A revisão exige uma conversa existente com a mesma conta e perfil. Nenhuma conversa foi criada."));
+        }
         Ok(Self {
             token: None,
             stored,
@@ -69,10 +72,17 @@ impl Model {
         )
     }
 }
+struct Chat {
+    ws: net::Socket,
+    gateway: protocol::Gateway,
+    heartbeat: Instant,
+}
 #[derive(Clone)]
 struct Runtime {
     backend: Backend,
     model: Arc<Mutex<Model>>,
+    chat: Arc<Mutex<Option<Chat>>>,
+    completed_reply: Arc<Mutex<Option<Value>>>,
     output: Output,
     alive: Arc<AtomicBool>,
     busy: Arc<AtomicBool>,
@@ -150,9 +160,18 @@ impl Runtime {
         if !self.alive.load(Ordering::SeqCst) {
             return Err(Error("Operação cancelada."));
         }
-        let mut ws = self.backend.socket("/api/ws", &token)?;
-        let gateway = net::gateway(&mut ws, &self.alive)?;
-        let result = self.snapshot(&mut ws, gateway)?;
+        let mut connection = self.chat.lock().map_err(|_| net::NETWORK)?;
+        if connection.is_none() {
+            let mut ws = self.backend.socket("/api/ws", &token)?;
+            let gateway = net::gateway(&mut ws, &self.alive)?;
+            *connection = Some(Chat {
+                ws,
+                gateway,
+                heartbeat: Instant::now(),
+            });
+        }
+        let chat = connection.as_mut().ok_or(net::NETWORK)?;
+        let result = self.snapshot(&mut chat.ws, chat.gateway)?;
         if !self.alive.load(Ordering::SeqCst) {
             return Err(Error("Operação cancelada."));
         }
@@ -191,10 +210,12 @@ impl Runtime {
             &self.backend.directory.join("hermes-diagnostic.json"),
             &Value::Null,
         )?;
-        let token = self.token()?;
-        let mut ws = self.backend.socket("/api/ws", &token)?;
-        let gateway = net::gateway(&mut ws, &self.alive)?;
-        let previous = self.snapshot(&mut ws, gateway)?;
+        self.token()?;
+        let mut connection = self.chat.lock().map_err(|_| net::NETWORK)?;
+        let chat = connection.as_mut().ok_or(net::LOGIN)?;
+        let gateway = chat.gateway;
+        let ws = &mut chat.ws;
+        let previous = self.snapshot(ws, gateway)?;
         if previous["running"] == true {
             return Err(net::UNKNOWN);
         }
@@ -204,7 +225,7 @@ impl Runtime {
             params["profile"] = json!(self.backend.config.profile);
         }
         let result = net::call_diagnosed(
-            &mut ws,
+            ws,
             "session.create",
             params,
             &self.alive,
@@ -250,7 +271,7 @@ impl Runtime {
         if text.trim().is_empty() || text.chars().count() > protocol::MAX_TEXT {
             return Err(Error("Digite uma mensagem de até 20 mil caracteres."));
         }
-        let token = self.token()?;
+        self.token()?;
         if self
             .model
             .lock()
@@ -260,15 +281,31 @@ impl Runtime {
         {
             return Err(net::UNKNOWN);
         }
-        let mut ws = self.backend.socket("/api/ws", &token)?;
-        let gateway = net::gateway(&mut ws, &self.alive)?;
-        let snapshot = self.snapshot(&mut ws, gateway)?;
+        let mut connection = self.chat.lock().map_err(|_| net::NETWORK)?;
+        let chat = connection.as_mut().ok_or(net::LOGIN)?;
+        let gateway = chat.gateway;
+        let ws = &mut chat.ws;
+        let snapshot = self.snapshot(ws, gateway)?;
         let sid = snapshot["session_id"]
             .as_str()
             .ok_or(Error("Sessão inválida."))?;
         if snapshot["running"] == true {
             return Err(net::UNKNOWN);
         }
+        // Baseline before admission: replay must never consume an earlier turn.
+        let mut replay_sequence = 0;
+        let mut replay_epoch = String::new();
+        if !gateway.canonical() {
+            let mut params = json!({"session_id":sid,"last_seen":u64::MAX});
+            if !self.backend.config.profile.is_empty() {
+                params["profile"] = json!(self.backend.config.profile);
+            }
+            let baseline = net::call(ws, "session.events.since", params, &self.alive)?;
+            replay_sequence = baseline["latest_seq"].as_u64().ok_or(net::UNKNOWN)?;
+            replay_epoch = baseline["epoch"].as_str().ok_or(net::UNKNOWN)?.into();
+        }
+        let mut replay_due = Instant::now();
+        let mut replay_waiting = false;
         let request = storage::id()?;
         {
             let mut model = self
@@ -286,10 +323,7 @@ impl Runtime {
         if !gateway.canonical() && !self.backend.config.profile.is_empty() {
             submission["profile"] = json!(self.backend.config.profile);
         }
-        net::send(
-            &mut ws,
-            protocol::rpc(&request, "prompt.submit", submission),
-        )?;
+        net::send(ws, protocol::rpc(&request, "prompt.submit", submission))?;
         let mut reply = if gateway.canonical() {
             protocol::Reply::new(sid)
         } else {
@@ -305,6 +339,29 @@ impl Runtime {
         let mut early_events = Vec::new();
         let mut early_bytes = 0;
         while self.alive.load(Ordering::SeqCst) && Instant::now() < deadline {
+            if chat.heartbeat.elapsed() >= Duration::from_secs(15) {
+                net::send(
+                    ws,
+                    protocol::rpc("moto-heartbeat", "gateway.ping", json!({})),
+                )?;
+                chat.heartbeat = Instant::now();
+            }
+            if !gateway.canonical()
+                && accepted
+                && !replay_waiting
+                && replay_due.elapsed() >= Duration::from_secs(2)
+            {
+                let mut params = json!({"session_id":sid,"last_seen":replay_sequence});
+                if !self.backend.config.profile.is_empty() {
+                    params["profile"] = json!(self.backend.config.profile);
+                }
+                net::send(
+                    ws,
+                    protocol::rpc("moto-replay", "session.events.since", params),
+                )?;
+                replay_waiting = true;
+                replay_due = Instant::now();
+            }
             if self.turn_signal.load(Ordering::SeqCst) == 1
                 && ((!gateway.canonical() && accepted && !interrupt_sent)
                     || (execution_generation.is_some() && !interrupt_sent)
@@ -335,7 +392,7 @@ impl Runtime {
                 } else {
                     "moto-cancel"
                 };
-                net::send(&mut ws, protocol::rpc(stop_id, method, params))?;
+                net::send(ws, protocol::rpc(stop_id, method, params))?;
                 stop_sent = true;
                 let mut model = self
                     .model
@@ -345,9 +402,34 @@ impl Runtime {
                 model.save(&self.backend)?;
                 self.output.event(json!({"event":"status","state":"thinking","text":"Parada solicitada; aguardando o Hermes."}));
             }
-            if let Some(Message::Text(data)) = net::receive(&mut ws)? {
+            if let Some(Message::Text(data)) = net::receive(ws)? {
                 let mut frames: std::collections::VecDeque<_> = protocol::frames(&data)?.into();
                 while let Some(value) = frames.pop_front() {
+                    if value["id"] == "moto-replay" && replay_waiting {
+                        replay_waiting = false;
+                        let result = &value["result"];
+                        if value.get("error").is_some()
+                            || result["truncated"] != false
+                            || result["epoch"] != replay_epoch
+                        {
+                            return Err(net::UNKNOWN);
+                        }
+                        let events = result["events"].as_array().ok_or(net::UNKNOWN)?;
+                        let latest = result["latest_seq"].as_u64().ok_or(net::UNKNOWN)?;
+                        if latest < replay_sequence {
+                            return Err(net::UNKNOWN);
+                        }
+                        for params in events.iter().rev() {
+                            // Replayed params pass through the same scoped completion parser.
+                            let seq = params["seq"].as_u64().ok_or(net::UNKNOWN)?;
+                            if seq > replay_sequence && seq <= latest && params["session_id"] == sid
+                            {
+                                frames.push_front(json!({"method":"event","params":params}));
+                            }
+                        }
+                        replay_sequence = latest;
+                        continue;
+                    }
                     if value["id"] == request {
                         let mut model = self
                             .model
@@ -484,6 +566,20 @@ impl Runtime {
                     let _ = model.save(&runtime.backend);
                 }
             }
+            let result = result.map(|mut value| {
+                if kind == "send" {
+                    value["client_turn"] = command["client_turn"].clone();
+                    if let Ok(mut cached) = runtime.completed_reply.lock() {
+                        *cached = Some(value.clone());
+                    }
+                }
+                value
+            });
+            if result.as_ref().is_err_and(|error| *error == net::NETWORK) {
+                if let Ok(mut chat) = runtime.chat.lock() {
+                    *chat = None;
+                }
+            }
             runtime.busy.store(false, Ordering::SeqCst);
             if runtime.alive.load(Ordering::SeqCst) {
                 match result {
@@ -552,6 +648,8 @@ fn main() {
         Ok::<_, Error>(Runtime {
             backend,
             model: Arc::new(Mutex::new(model)),
+            chat: Arc::new(Mutex::new(None)),
+            completed_reply: Arc::new(Mutex::new(None)),
             output: output.clone(),
             alive: Arc::new(AtomicBool::new(true)),
             busy: Arc::new(AtomicBool::new(false)),
@@ -568,7 +666,31 @@ fn main() {
         }
     };
     output.event(json!({"event":"ready","version":env!("CARGO_PKG_VERSION")}));
-    let mut jobs = Vec::new();
+    let pulse = runtime.clone();
+    let mut jobs = vec![thread::spawn(move || {
+        while pulse.alive.load(Ordering::SeqCst) {
+            if let Ok(mut connection) = pulse.chat.try_lock() {
+                if let Some(chat) = connection.as_mut() {
+                    let result = (|| {
+                        if chat.heartbeat.elapsed() >= Duration::from_secs(15) {
+                            net::send(
+                                &mut chat.ws,
+                                protocol::rpc("moto-heartbeat", "gateway.ping", json!({})),
+                            )?;
+                            chat.heartbeat = Instant::now();
+                        }
+                        net::receive(&mut chat.ws)?;
+                        Ok::<_, Error>(())
+                    })();
+                    if result.is_err() {
+                        *connection = None;
+                        pulse.output.event(json!({"event":"connection_lost","text":"Conexão com o Hermes encerrada. Reconecte à conversa existente."}));
+                    }
+                }
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    })];
     let mut input = io::stdin().lock();
     loop {
         let mut line = Vec::new();
@@ -589,6 +711,28 @@ fn main() {
         };
         match value["cmd"].as_str().unwrap_or("") {
             "close" => break,
+            "poll_reply" => {
+                if let Ok(cached) = runtime.completed_reply.lock() {
+                    if let Some(reply) = cached
+                        .as_ref()
+                        .filter(|reply| reply["client_turn"] == value["client_turn"])
+                    {
+                        output.event(reply.clone());
+                    } else {
+                        output.event(json!({"event":"turn_state","client_turn":value["client_turn"],"reply_available":false,"busy":runtime.busy.load(Ordering::SeqCst)}));
+                    }
+                }
+            }
+            "ack_reply" => {
+                if let Ok(mut cached) = runtime.completed_reply.lock() {
+                    if cached
+                        .as_ref()
+                        .is_some_and(|reply| reply["client_turn"] == value["client_turn"])
+                    {
+                        *cached = None;
+                    }
+                }
+            }
             "stop_speech" => {
                 runtime.speech_signal.store(1, Ordering::SeqCst);
             }

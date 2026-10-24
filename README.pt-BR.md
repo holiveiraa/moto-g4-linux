@@ -43,7 +43,8 @@ em Linux a partir do fonte atual. Não representam uma conversa real já validad
 - **Conversa sem apertar botão**: Groq transcreve a ativação e os pedidos; o
   próprio Hermes usa Edge TTS para responder. A conversa exige internet.
 - **Seu agente existente**: usa o perfil escolhido, com uma conversa própria
-  do Moto, mantida ao fechar e reabrir. Não se mistura com o Telegram.
+  do Moto, mantida ao fechar e reabrir. As perguntas reutilizam a conexão;
+  reconectar retoma essa conversa. Não se mistura com o Telegram.
 - **“Nova conversa”**: muda de contexto sem carregar o assunto anterior nem
   apagar chats antigos. O perfil continua o mesmo.
 - **“Voltar a dormir”**: volta a esperar a ativação. **“Voltar ao terminal”**
@@ -58,7 +59,7 @@ transcrição local no Motorola. O fluxo Groq → Hermes → Edge passou com ser
 reais e fala sintética pelo microfone/alto-falante, incluindo rejeição antes da
 ativação e 60 segundos sem envio extra depois da resposta. A voz do dono no uso
 real, calor e autonomia ainda precisam de verificação.
-[Resultados e limites](docs/status.md#groq-activation--24-october).
+[Resultados e limites](docs/status.md#conversation-reuse-and-completed-reply-recovery--24-october).
 
 ## Configure os dois lados
 
